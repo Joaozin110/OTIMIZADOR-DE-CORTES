@@ -231,6 +231,9 @@
                 const totalHeight = plan.length * (totalBarHeight + padding);
                 canvas.height = totalHeight > 0 ? totalHeight : totalBarHeight + padding;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const colorMap = {};
+                let colorIndex = 0;
 
                 plan.forEach((bar, barIndex) => {
                     const y = barIndex * (totalBarHeight + padding);
@@ -240,31 +243,75 @@
                     ctx.strokeStyle = '#9ca3af';
                     ctx.strokeRect(0, y + textHeight, canvasWidth, barHeight);
 
-                    bar.cuts.forEach((cut, cutIndex) => {
-                        const cutWidth = (cut / barLength) * canvasWidth;
-                        ctx.fillStyle = colors[cutIndex % colors.length];
-                        ctx.fillRect(currentX, y + textHeight, cutWidth, barHeight);
-                        ctx.strokeStyle = '#fff';
-                        ctx.strokeRect(currentX, y + textHeight, cutWidth, barHeight);
+                    // Group small cuts for labeling
+                    const labelGroups = [];
+                    let currentGroup = null;
 
-                        ctx.fillStyle = '#1f2937';
-                        ctx.font = '12px Inter';
+                    bar.cuts.forEach((cut, index) => {
+                        const cutWidth = (cut / barLength) * canvasWidth;
                         const text = `${cut.toFixed(3)}m`;
                         const textMetrics = ctx.measureText(text);
-                        const textX = currentX + (cutWidth / 2) - (textMetrics.width / 2);
-                        
-                        if (cutWidth > textMetrics.width + 8) {
-                            const textY = y + textHeight + (barHeight / 2) + 5;
-                            ctx.fillText(text, textX, textY);
+                        const isSmall = cutWidth < textMetrics.width + 8;
+
+                        if (currentGroup && currentGroup.cut === cut && currentGroup.isSmall === isSmall) {
+                            currentGroup.count++;
+                            currentGroup.width += cutWidth;
                         } else {
-                            const textY = y + textHeight - 4;
-                            if(textX >= 0 && textX + textMetrics.width < canvasWidth) {
-                                ctx.fillText(text, textX, textY);
-                            }
+                            if (currentGroup) labelGroups.push(currentGroup);
+                            currentGroup = { cut, count: 1, startX: currentX, width: cutWidth, isSmall };
                         }
                         currentX += cutWidth;
                     });
+                    if (currentGroup) labelGroups.push(currentGroup);
 
+                    // Draw cuts and labels
+                    currentX = 0;
+                    bar.cuts.forEach(cut => {
+                        if (!colorMap[cut]) {
+                            colorMap[cut] = colors[colorIndex % colors.length];
+                            colorIndex++;
+                        }
+                        const cutWidth = (cut / barLength) * canvasWidth;
+                        ctx.fillStyle = colorMap[cut];
+                        ctx.fillRect(currentX, y + textHeight, cutWidth, barHeight);
+                        ctx.strokeStyle = '#fff';
+                        ctx.strokeRect(currentX, y + textHeight, cutWidth, barHeight);
+                        currentX += cutWidth;
+                    });
+
+                    labelGroups.forEach(group => {
+                        ctx.fillStyle = '#1f2937';
+                        ctx.font = '12px Inter';
+                        
+                        if (group.count > 1 && group.isSmall) {
+                            const text = `${group.count}x ${group.cut.toFixed(3)}m`;
+                            const textMetrics = ctx.measureText(text);
+                            const textX = group.startX + (group.width / 2) - (textMetrics.width / 2);
+                            const textY = y + textHeight - 4;
+                            if (textX >= 0 && textX + textMetrics.width < canvasWidth) {
+                                ctx.fillText(text, textX, textY);
+                            }
+                        } else {
+                            for (let i = 0; i < group.count; i++) {
+                                const singleCutWidth = (group.cut / barLength) * canvasWidth;
+                                const startX = group.startX + (i * singleCutWidth);
+                                const text = `${group.cut.toFixed(3)}m`;
+                                const textMetrics = ctx.measureText(text);
+                                const textX = startX + (singleCutWidth / 2) - (textMetrics.width / 2);
+                                
+                                if (group.isSmall) {
+                                    const textY = y + textHeight - 4;
+                                    if (textX >= 0 && textX + textMetrics.width < canvasWidth) {
+                                        ctx.fillText(text, textX, textY);
+                                    }
+                                } else {
+                                    const textY = y + textHeight + (barHeight / 2) + 5;
+                                    ctx.fillText(text, textX, textY);
+                                }
+                            }
+                        }
+                    });
+                    
                     const wasteWidth = (bar.waste / barLength) * canvasWidth;
                     if (wasteWidth > 1) {
                         ctx.fillStyle = '#d1d5db';
