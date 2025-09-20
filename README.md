@@ -75,13 +75,30 @@ Um aplicativo web avançado para otimização de cortes e planejamento de instal
 - [x] Otimização do aplicativo para dispositivos móveis
 - [x] Teste e refinamento das funcionalidades
 
+### Ciclo 2 ✅ (Concluído)
+- [x] Sistema de ferramentas especializadas (toolbar avançada)
+- [x] Controles de zoom e navegação profissionais
+- [x] Sistema de custos e orçamento automático
+- [x] Busca e filtros avançados por categoria
+- [x] Snap guides visuais e sistema de encaixe inteligente
+- [x] Resumo detalhado do projeto com métricas
+- [x] Melhorias significativas de interface e UX
+
 ### Próximos Ciclos 🔄
-- Ciclo 2: Melhorias de UX e performance
-- Ciclo 3: Funcionalidades avançadas de snap e encaixe
-- Ciclo 4: Sistema de relatórios e exportação
-- Ciclo 5: Otimizações finais e polimento
+- Ciclo 3: Sistema de templates e exportação avançada
+- Ciclo 4: Medidas precisas e dimensionamento
+- Ciclo 5: Integração com catálogos e otimizações finais
 
 ## 📝 Changelog
+
+### v1.2.0 - Ciclo 2 (2025-09-20)
+- 🛠️ Toolbar avançada com ferramentas especializadas
+- 🔍 Controles de zoom profissionais com minimapa
+- 💰 Sistema completo de custos e orçamento automático
+- 🔎 Busca inteligente e filtros por categoria
+- 📏 Snap guides visuais para alinhamento preciso
+- 📊 Resumo detalhado com métricas do projeto
+- 🎨 Interface profissional com melhorias significativas de UX
 
 ### v1.1.0 - Ciclo 1 (2025-09-20)
 - ✨ Implementação completa da importação DWG simulada
