@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otimizador de Cortes de Materiais</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel to transpile JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <!-- SheetJS (xlsx) for spreadsheet parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .no-spinner::-webkit-outer-spin-button,
+        .no-spinner::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .no-spinner {
+            -moz-appearance: textfield;
+        }
+        /* Styles for Drag and Drop */
+        .dragging {
+            opacity: 0.5;
+            background: #c7d2fe;
+        }
+        .drag-over {
+            border: 2px dashed #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, createContext, useContext } = React;
+        const { jsPDF } = window.jspdf;
+
+        // --- DATABASE SIMULATION with localStorage Persistence ---
+        const DB_KEY = 'cuttingOptimizer_db';
+
+        const initialDbData = {
+            kits: [
+                { id: 1, name: "PRUMADA ESG C/ PLUVIAL" },
+                { id: 2, name: "PRUMADA ESG S/ PLUVIAL" },
+                { id: 3, name: "RAMAL DE ESGOTO" },
+                { id: 4, name: "SANCA + FORRO" },
+                { id: 5, name: "PERFILADO" },
+            ],
+            floors: [
+                { id: "TER", name: "TÉRREO" },
+                { id: "1-2", name: "1°-2° PAV." },
+                { id: "3", name: "3° PAV." },
+                { id: "4-14", name: "4°-14° PAV." },
+                { id: "COB", name: "COBERTURA" },
+            ],
+            cuts: [
+                { id: 1, kit_id: 1, floor: "TER", material_name: "Tubo 100mm", cut_length: 3.000, quantity_per_kit: 1 },
+                { id: 2, kit_id: 1, floor: "TER", material_name: "Tubo 100mm", cut_length: 2.200, quantity_per_kit: 1 },
+                { id: 3, kit_id: 1, floor: "1-2", material_name: "Tubo 100mm", cut_length: 2.500, quantity_per_kit: 1 },
+            ],
+            scraps: [],
+            config: { 
+                material_lengths: [
+                    { id: 1, material_name: "Tubo 100mm", length: 6.000 },
+                    { id: 2, material_name: "Tubo 75mm", length: 6.000 },
+                    { id: 3, material_name: "Tubo 50mm", length: 6.000 },
+                    { id: 4, material_name: "Tubo 40mm", length: 6.000 },
+                    { id: 5, material_name: "Perfilado 40x20mm", length: 6.000 },
+                    { id: 6, material_name: "Perfilado 20x20mm", length: 6.000 },
+                    { id: 7, material_name: "Padrão", length: 6.000 },
+                ]
+            }
+        };
+
+        const db = {
+            getData: () => {
+                const data = localStorage.getItem(DB_KEY);
+                return data ? JSON.parse(data) : initialDbData;
+            },
+            saveData: (data) => {
+                localStorage.setItem(DB_KEY, JSON.stringify(data));
+            }
+        };
+
+        // --- CUTTING OPTIMIZATION ALGORITHM (with Scrap Management) ---
+        function optimizeCutsBFD(barLength, requiredCuts, availableScraps = []) {
+            if (!requiredCuts || requiredCuts.length === 0) return { usedBars: [], newScraps: [], remainingScraps: availableScraps };
+
+            const sortedCuts = [...requiredCuts].sort((a, b) => b - a);
+            let mutableScraps = availableScraps.map(s => ({...s})).sort((a, b) => a.length - b.length);
+            const cutsForNewBars = [];
+            
+            sortedCuts.forEach(cut => {
+                let bestScrapIndex = -1;
+                let minWaste = barLength + 1;
+
+                for (let i = 0; i < mutableScraps.length; i++) {
+                    const scrap = mutableScraps[i];
+                    if (scrap.length >= cut) {
+                        const waste = scrap.length - cut;
+                        if (waste < minWaste) {
+                            minWaste = waste;
+                            bestScrapIndex = i;
+                        }
+                    }
+                }
+
+                if (bestScrapIndex !== -1) {
+                    const usedScrap = mutableScraps[bestScrapIndex];
+                    usedScrap.length -= cut;
+                    if (usedScrap.length < 0.001) {
+                        mutableScraps.splice(bestScrapIndex, 1);
+                    }
+                } else {
+                    cutsForNewBars.push(cut);
+                }
+            });
+            
+            const bars = [];
+            cutsForNewBars.forEach(cut => {
+                let bestBarIndex = -1;
+                let minWaste = barLength + 1;
+                bars.forEach((bar, index) => {
+                    const currentSum = bar.cuts.reduce((acc, val) => acc + val, 0);
+                    const remainingSpace = barLength - currentSum;
+                    if (cut <= remainingSpace) {
+                        const waste = remainingSpace - cut;
+                        if (waste < minWaste) {
+                            minWaste = waste;
+                            bestBarIndex = index;
+                        }
+                    }
+                });
+                if (bestBarIndex !== -1) {
+                    bars[bestBarIndex].cuts.push(cut);
+                } else {
+                    bars.push({ cuts: [cut] });
+                }
+            });
+
+            const newScraps = [];
+            bars.forEach(bar => {
+                const totalCutLength = bar.cuts.reduce((acc, val) => acc + val, 0);
+                bar.waste = barLength - totalCutLength;
+                if (bar.waste > 0.001) { // Minimum length to be considered a scrap
+                    newScraps.push({ length: bar.waste });
+                }
+            });
+
+            return { usedBars: bars, newScraps, remainingScraps: mutableScraps };
+        }
+
+        // --- NOTIFICATION & MODAL SYSTEM ---
+        const AppContext = createContext();
+        const useAppContext = () => useContext(AppContext);
+
+        const AppProvider = ({ children }) => {
+            const [notification, setNotification] = useState(null);
+            const [modal, setModal] = useState(null);
+
+            const notify = (message, type = 'success') => {
+                setNotification({ id: Date.now(), message, type });
+                setTimeout(() => setNotification(null), 3000);
+            };
+
+            const confirm = ({ message, onConfirm, onCancel, confirmText = 'Confirmar' }) => {
+                setModal({ message, onConfirm: () => { onConfirm(); setModal(null); }, onCancel: () => { if (onCancel) onCancel(); setModal(null); }, confirmText });
+            };
+
+            return (
+                <AppContext.Provider value={{ notify, confirm }}>
+                    {children}
+                    {notification && (
+                        <div className={`fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white z-50 transition-opacity duration-300 ${notification ? 'opacity-100' : 'opacity-0'} ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                            {notification.message}
+                        </div>
+                    )}
+                    {modal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+                                <h3 className="text-lg font-bold mb-4">Confirmação</h3>
+                                <p className="mb-6">{modal.message}</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={modal.onCancel} className="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancelar</button>
+                                    <button onClick={modal.onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">{modal.confirmText}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </AppContext.Provider>
+            );
+        };
+
+        // --- REACT COMPONENTS ---
+        const SvgIcon = ({ path, className = "w-6 h-6" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={path} />
+            </svg>
+        );
+
+        function CuttingPlanVisual({ plan, barLength, materialName }) {
+            const canvasRef = useRef(null);
+            const containerRef = useRef(null);
+            const colors = useMemo(() => ['#3b82f6', '#10b981', '#f97316', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#6366f1'], []);
+
+            const draw = () => {
+                const canvas = canvasRef.current;
+                const container = containerRef.current;
+                if (!canvas || !container || !plan) return;
+
+                const canvasWidth = container.offsetWidth;
+                canvas.width = canvasWidth;
+                const ctx = canvas.getContext('2d');
+                const barHeight = 40;
+                const padding = 10;
+                const textHeight = 15;
+                const totalBarHeight = barHeight + textHeight;
+                const totalHeight = plan.length * (totalBarHeight + padding);
+                canvas.height = totalHeight > 0 ? totalHeight : totalBarHeight + padding;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const colorMap = {};
+                let colorIndex = 0;
+
+                plan.forEach((bar, barIndex) => {
+                    const y = barIndex * (totalBarHeight + padding);
+                    let currentX = 0;
+                    ctx.fillStyle = '#e5e7eb';
+                    ctx.fillRect(0, y + textHeight, canvasWidth, barHeight);
+                    ctx.strokeStyle = '#9ca3af';
+                    ctx.strokeRect(0, y + textHeight, canvasWidth, barHeight);
+
+                    // Group small cuts for labeling
+                    const labelGroups = [];
+                    let currentGroup = null;
+
+                    bar.cuts.forEach((cut, index) => {
+                        const cutWidth = (cut / barLength) * canvasWidth;
+                        const text = `${cut.toFixed(3)}m`;
+                        const textMetrics = ctx.measureText(text);
+                        const isSmall = cutWidth < textMetrics.width + 8;
+
+                        if (currentGroup && currentGroup.cut === cut && currentGroup.isSmall === isSmall) {
+                            currentGroup.count++;
+                            currentGroup.width += cutWidth;
+                        } else {
+                            if (currentGroup) labelGroups.push(currentGroup);
+                            currentGroup = { cut, count: 1, startX: currentX, width: cutWidth, isSmall };
+                        }
+                        currentX += cutWidth;
+                    });
+                    if (currentGroup) labelGroups.push(currentGroup);
+
+                    // Draw cuts and labels
+                    currentX = 0;
+                    bar.cuts.forEach(cut => {
+                        if (!colorMap[cut]) {
+                            colorMap[cut] = colors[colorIndex % colors.length];
+                            colorIndex++;
+                        }
+                        const cutWidth = (cut / barLength) * canvasWidth;
+                        ctx.fillStyle = colorMap[cut];
+                        ctx.fillRect(currentX, y + textHeight, cutWidth, barHeight);
+                        ctx.strokeStyle = '#fff';
+                        ctx.strokeRect(currentX, y + textHeight, cutWidth, barHeight);
+                        currentX += cutWidth;
+                    });
+
+                    labelGroups.forEach(group => {
+                        ctx.fillStyle = '#1f2937';
+                        ctx.font = '12px Inter';
+                        
+                        if (group.count > 1 && group.isSmall) {
+                            const text = `${group.count}x ${group.cut.toFixed(3)}m`;
+                            const textMetrics = ctx.measureText(text);
+                            const textX = group.startX + (group.width / 2) - (textMetrics.width / 2);
+                            const textY = y + textHeight - 4;
+                            if (textX >= 0 && textX + textMetrics.width < canvasWidth) {
+                                ctx.fillText(text, textX, textY);
+                            }
+                        } else {
+                            for (let i = 0; i < group.count; i++) {
+                                const singleCutWidth = (group.cut / barLength) * canvasWidth;
+                                const startX = group.startX + (i * singleCutWidth);
+                                const text = `${group.cut.toFixed(3)}m`;
+                                const textMetrics = ctx.measureText(text);
+                                const textX = startX + (singleCutWidth / 2) - (textMetrics.width / 2);
+                                
+                                if (group.isSmall) {
+                                    const textY = y + textHeight - 4;
+                                    if (textX >= 0 && textX + textMetrics.width < canvasWidth) {
+                                        ctx.fillText(text, textX, textY);
+                                    }
+                                } else {
+                                    const textY = y + textHeight + (barHeight / 2) + 5;
+                                    ctx.fillText(text, textX, textY);
+                                }
+                            }
+                        }
+                    });
+                    
+                    const wasteWidth = (bar.waste / barLength) * canvasWidth;
+                    if (wasteWidth > 1) {
+                        ctx.fillStyle = '#d1d5db';
+                        ctx.fillRect(currentX, y + textHeight, wasteWidth, barHeight);
+                        ctx.fillStyle = '#4b5563';
+                        ctx.font = '10px Inter';
+                        const wasteText = `Sobra: ${bar.waste.toFixed(3)}m`;
+                        const textMetrics = ctx.measureText(wasteText);
+                        if (wasteWidth > textMetrics.width + 4) {
+                           const textX = currentX + (wasteWidth / 2) - (textMetrics.width / 2);
+                           const textY = y + textHeight + (barHeight / 2) + 4;
+                           ctx.fillText(wasteText, textX, textY);
+                        }
+                    }
+                });
+            };
+            
+            useEffect(() => {
+                draw();
+                window.addEventListener('resize', draw);
+                return () => window.removeEventListener('resize', draw);
+            }, [plan, barLength, colors]);
+
+            return (
+                <div ref={containerRef} className="w-full">
+                    <canvas ref={canvasRef} data-material-name={materialName}></canvas>
+                </div>
+            );
+        }
+
+        function ResultsDisplay({ results, onExportPDF, onExportCSV }) {
+            if (!results) return null;
+            const totalBars = Object.values(results).reduce((sum, p) => sum + p.groupedBars.reduce((acc, bar) => acc + bar.quantity, 0), 0);
+            const totalWaste = Object.values(results).reduce((total, p) => total + p.groupedBars.reduce((acc, bar) => acc + (bar.waste * bar.quantity), 0), 0);
+            const totalBarLength = Object.values(results).reduce((total, p) => total + p.groupedBars.reduce((acc, bar) => acc + (bar.barLength * bar.quantity), 0), 0);
+            const utilization = totalBarLength > 0 ? ((totalBarLength - totalWaste) / totalBarLength) * 100 : 0;
+
+            return (
+                <div id="results-section" className="mt-8 p-6 bg-white rounded-lg shadow-md">
+                    <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+                        <h2 className="text-2xl font-bold text-gray-800">Relatório de Corte</h2>
+                        <div className="flex gap-2">
+                            <button onClick={onExportCSV} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"><SvgIcon path="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" className="w-5 h-5" />Gerar Planilha Excel</button>
+                            <button onClick={onExportPDF} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"><SvgIcon path="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" className="w-5 h-5" />Gerar Relatório PDF</button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                        <div className="p-4 bg-blue-50 rounded-lg"><p className="text-sm text-blue-700 font-medium">Total de Barras Novas</p><p className="text-2xl font-bold text-blue-900">{totalBars}</p></div>
+                        <div className="p-4 bg-green-50 rounded-lg"><p className="text-sm text-green-700 font-medium">Aproveitamento</p><p className="text-2xl font-bold text-green-900">{utilization.toFixed(2)}%</p></div>
+                        <div className="p-4 bg-yellow-50 rounded-lg"><p className="text-sm text-yellow-700 font-medium">Desperdício Gerado</p><p className="text-2xl font-bold text-yellow-900">{totalWaste.toFixed(3)}m</p></div>
+                    </div>
+                    {Object.entries(results).map(([materialName, plan]) => (
+                        <div key={materialName} className="mb-8 p-4 border border-gray-200 rounded-lg">
+                            <h3 className="text-xl font-semibold text-gray-700 mb-2">{materialName}</h3>
+                            <p className="text-gray-600 mb-4">Total de barras de {plan.barLength.toFixed(3)}m necessárias: <span className="font-bold">{plan.groupedBars.reduce((acc, bar) => acc + bar.quantity, 0)}</span></p>
+
+                            <div className="mb-4 p-4 bg-gray-50 rounded-md">
+                                <h4 className="font-semibold text-gray-600 mb-2">Resumo de Peças a Cortar:</h4>
+                                <ul className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-sm text-gray-700">
+                                    {Object.entries(plan.totalCutsSummary).sort(([a],[b]) => b - a).map(([length, qty]) => (
+                                        <li key={length}>
+                                            <span className="font-medium">{qty} peça(s)</span> de {parseFloat(length).toFixed(3)}m
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            {plan.groupedBars.map((bar, index) => (
+                                <div key={index} className="mb-2">
+                                    <p className="font-semibold text-indigo-700 mb-1">Modelo de Corte (Repetir {bar.quantity}x)</p>
+                                    <CuttingPlanVisual
+                                        plan={[ { cuts: bar.pattern, waste: bar.waste } ]}
+                                        barLength={plan.barLength}
+                                        materialName={`${materialName}-pattern-${index}`}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        function Calculator({ dbState, onCalculate }) {
+            const [selectedKit, setSelectedKit] = useState('');
+            const [selectedFloor, setSelectedFloor] = useState('');
+            const [availableFloors, setAvailableFloors] = useState([]);
+            const [quantity, setQuantity] = useState(1);
+            const [productionList, setProductionList] = useState([]);
+            const [error, setError] = useState('');
+            const dragItem = useRef();
+            const dragOverItem = useRef();
+            const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+            const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+            const { notify } = useAppContext();
+
+            useEffect(() => {
+                if (dbState.kits.length > 0) {
+                    setSelectedKit(dbState.kits[0].id);
+                }
+            }, [dbState.kits]);
+
+            useEffect(() => {
+                if (selectedKit) {
+                    const cutsForKit = dbState.cuts.filter(c => c.kit_id === parseInt(selectedKit));
+                    const floorIds = [...new Set(cutsForKit.map(c => c.floor))];
+                    const floors = dbState.floors.filter(f => floorIds.includes(f.id));
+                    setAvailableFloors(floors);
+                    if (floors.length > 0) {
+                        setSelectedFloor(floors[0].id);
+                    } else {
+                        setSelectedFloor('');
+                    }
+                }
+            }, [selectedKit, dbState.cuts, dbState.floors]);
+
+            const handleAdd = () => {
+                const numQuantity = parseFloat(String(quantity).replace(',', '.'));
+                if (!selectedKit || !selectedFloor || !numQuantity || numQuantity <= 0) { setError("Por favor, preencha todos os campos com valores válidos."); return; }
+                setError('');
+                const kitToAdd = dbState.kits.find(k => k.id === parseInt(selectedKit));
+                const floorToAdd = dbState.floors.find(f => f.id === selectedFloor);
+                const existingIndex = productionList.findIndex(item => item.kit_id === kitToAdd.id && item.floor_id === floorToAdd.id);
+                if (existingIndex > -1) {
+                    const newList = [...productionList];
+                    newList[existingIndex].quantity += numQuantity;
+                    setProductionList(newList);
+                } else {
+                    setProductionList(prev => [...prev, { id: Date.now(), kit_id: kitToAdd.id, kit_name: kitToAdd.name, floor_id: floorToAdd.id, floor_name: floorToAdd.name, quantity: numQuantity }]);
+                }
+                setQuantity(1);
+            };
+
+            const handleRemove = (itemId) => { setProductionList(productionList.filter(item => item.id !== itemId)); };
+            const handleSort = () => {
+                const list = [...productionList];
+                const draggedItemContent = list.splice(dragItem.current, 1)[0];
+                list.splice(dragOverItem.current, 0, draggedItemContent);
+                dragItem.current = null;
+                dragOverItem.current = null;
+                setProductionList(list);
+            };
+
+            const handleSaveList = (name) => {
+                const savedLists = JSON.parse(localStorage.getItem('savedProductionLists') || '[]');
+                const existingIndex = savedLists.findIndex(l => l.name === name);
+                if (existingIndex > -1) {
+                    savedLists[existingIndex] = { name, date: new Date().toISOString(), list: productionList };
+                } else {
+                    savedLists.push({ name, date: new Date().toISOString(), list: productionList });
+                }
+                localStorage.setItem('savedProductionLists', JSON.stringify(savedLists));
+                notify(`Lista "${name}" salva com sucesso!`);
+                setIsSaveModalOpen(false);
+            };
+
+            const handleLoadList = (list) => {
+                setProductionList(list);
+                setIsLoadModalOpen(false);
+                notify("Lista carregada com sucesso!");
+            };
+
+            return (
+                <div className="space-y-8">
+                    {isSaveModalOpen && <SaveListModal onSave={handleSaveList} onClose={() => setIsSaveModalOpen(false)} />}
+                    {isLoadModalOpen && <LoadListModal onLoad={handleLoadList} onClose={() => setIsLoadModalOpen(false)} />}
+                    <div className="p-6 bg-white rounded-lg shadow-md">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">1. Seleção de Itens</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div className="md:col-span-2"><label htmlFor="kit-select" className="block text-sm font-medium text-gray-700 mb-1">Tipo de Kit</label><select id="kit-select" value={selectedKit} onChange={(e) => setSelectedKit(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">{dbState.kits.map(kit => <option key={kit.id} value={kit.id}>{kit.name}</option>)}</select></div>
+                            <div><label htmlFor="floor-select" className="block text-sm font-medium text-gray-700 mb-1">Pavimento</label><select id="floor-select" value={selectedFloor} onChange={(e) => setSelectedFloor(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" disabled={availableFloors.length === 0}>{availableFloors.length > 0 ? availableFloors.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>) : <option>Nenhum pavimento</option>}</select></div>
+                            <div><label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">Quantidade</label><input type="text" id="quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 no-spinner" /></div>
+                        </div>
+                        <div className="flex justify-end mt-4"><button onClick={handleAdd} className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"><SvgIcon path="M12 4.5v15m7.5-7.5h-15" className="w-5 h-5" />Adicionar</button></div>
+                        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                    </div>
+                    <div className="p-6 bg-white rounded-lg shadow-md">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-gray-800">2. Lista de Produção</h2>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsSaveModalOpen(true)} disabled={productionList.length === 0} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400">Salvar Lista</button>
+                                <button onClick={() => setIsLoadModalOpen(true)} className="px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700">Carregar Listas</button>
+                            </div>
+                        </div>
+                        {productionList.length === 0 ? (<p className="text-gray-500">Nenhum item adicionado ainda.</p>) : (
+                            <div className="space-y-3">
+                                {productionList.map((item, index) => (
+                                    <div key={item.id} draggable onDragStart={(e) => dragItem.current = index} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleSort} onDragOver={(e) => e.preventDefault()} className="flex justify-between items-center p-3 bg-gray-50 rounded-md border cursor-move">
+                                        <div><span className="font-semibold text-gray-700">{item.kit_name}</span><span className="text-sm text-gray-500 ml-2">({item.floor_name})</span></div>
+                                        <div className="flex items-center gap-4"><span className="text-gray-600">Qtd: <span className="font-bold text-indigo-600">{item.quantity}</span></span><button onClick={() => handleRemove(item.id)} className="text-red-500 hover:text-red-700"><SvgIcon path="M6 18L18 6M6 6l12 12" className="w-5 h-5" /></button></div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="mt-6 flex justify-end"><button onClick={() => onCalculate(productionList)} disabled={productionList.length === 0} className="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"><SvgIcon path="M4.5 12.75l6 6 9-13.5" className="w-6 h-6" />CALCULAR</button></div>
+                    </div>
+                </div>
+            );
+        }
+        
+        function SaveListModal({ onSave, onClose }) {
+            const [name, setName] = useState('');
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+                        <h3 className="text-lg font-bold mb-4">Salvar Lista de Produção</h3>
+                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da lista" className="w-full p-2 border rounded-md mb-4" />
+                        <div className="flex justify-end gap-2">
+                            <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded-md">Cancelar</button>
+                            <button onClick={() => onSave(name)} disabled={!name.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-gray-400">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function LoadListModal({ onLoad, onClose }) {
+            const [savedLists, setSavedLists] = useState([]);
+            const { notify, confirm } = useAppContext();
+
+            useEffect(() => {
+                setSavedLists(JSON.parse(localStorage.getItem('savedProductionLists') || '[]'));
+            }, []);
+
+            const handleDelete = (name) => {
+                confirm({
+                    message: `Tem certeza que deseja excluir a lista "${name}"?`,
+                    onConfirm: () => {
+                        const updatedLists = savedLists.filter(l => l.name !== name);
+                        localStorage.setItem('savedProductionLists', JSON.stringify(updatedLists));
+                        setSavedLists(updatedLists);
+                        notify(`Lista "${name}" excluída.`, "error");
+                    }
+                });
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+                        <h3 className="text-lg font-bold mb-4">Carregar Lista de Produção</h3>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {savedLists.length > 0 ? savedLists.map(item => (
+                                <div key={item.name} className="flex justify-between items-center p-2 border rounded-md">
+                                    <div>
+                                        <p className="font-semibold">{item.name}</p>
+                                        <p className="text-xs text-gray-500">Salvo em: {new Date(item.date).toLocaleString('pt-BR')}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => onLoad(item.list)} className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600">Carregar</button>
+                                        <button onClick={() => handleDelete(item.name)} className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600">Excluir</button>
+                                    </div>
+                                </div>
+                            )) : <p>Nenhuma lista salva.</p>}
+                        </div>
+                        <div className="mt-4 flex justify-end">
+                            <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded-md">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Other components (PresetsManager, ScrapsManager, etc.) remain the same as the last version...
+        function OperationsManager({ dbState, onDbChange }) {
+            const [newKitName, setNewKitName] = useState("");
+            const [newCut, setNewCut] = useState({ kit_id: '', floor: 'TER', material_name: '', cut_length: '', quantity_per_kit: '' });
+            const [editingKit, setEditingKit] = useState(null);
+            const [editingCut, setEditingCut] = useState(null);
+            const [selectedCuts, setSelectedCuts] = useState([]);
+            const fileInputRef = useRef(null);
+            const { notify, confirm } = useAppContext();
+
+            const handleUpdate = (updatedData) => {
+                db.saveData(updatedData);
+                onDbChange(updatedData);
+            };
+
+            const handleAddNewKit = () => { if (newKitName.trim()) { const newId = Math.max(0, ...dbState.kits.map(k => k.id)) + 1; const newKit = { id: newId, name: newKitName.trim() }; handleUpdate({...dbState, kits: [...dbState.kits, newKit]}); setNewKitName(""); notify("Kit adicionado com sucesso!"); } };
+            const handleUpdateKit = () => { if (editingKit && editingKit.name.trim()) { const updatedKits = dbState.kits.map(k => k.id === editingKit.id ? editingKit : k); handleUpdate({...dbState, kits: updatedKits}); setEditingKit(null); notify("Kit atualizado!"); } };
+            const handleDeleteKit = (kitId) => { confirm({ message: "Excluir este kit e todos os seus cortes? Esta ação não pode ser desfeita.", onConfirm: () => { const updatedKits = dbState.kits.filter(k => k.id !== kitId); const updatedCuts = dbState.cuts.filter(c => c.kit_id !== kitId); handleUpdate({...dbState, kits: updatedKits, cuts: updatedCuts}); notify("Kit excluído.", "error"); } }); };
+            const handleDuplicateKit = (kitId) => { confirm({ message: "Duplicar este kit e todos os seus cortes?", onConfirm: () => { const originalKit = dbState.kits.find(k => k.id === kitId); const newId = Math.max(0, ...dbState.kits.map(k => k.id)) + 1; const newKit = { id: newId, name: `CÓPIA - ${originalKit.name}`}; const originalCuts = dbState.cuts.filter(c => c.kit_id === kitId); let nextCutId = Math.max(0, ...dbState.cuts.map(c => c.id)) + 1; const newCuts = originalCuts.map(c => ({...c, id: nextCutId++, kit_id: newId})); handleUpdate({...dbState, kits: [...dbState.kits, newKit], cuts: [...dbState.cuts, ...newCuts]}); notify("Kit duplicado!"); } }); };
+            const handleAddNewCut = (kitId) => { if(newCut.material_name && newCut.cut_length > 0 && newCut.quantity_per_kit > 0 && newCut.floor) { const newId = Math.max(0, ...dbState.cuts.map(c => c.id)) + 1; const newCutData = { ...newCut, id: newId, kit_id: kitId, cut_length: parseFloat(String(newCut.cut_length).replace(',', '.')), quantity_per_kit: parseInt(newCut.quantity_per_kit) }; handleUpdate({...dbState, cuts: [...dbState.cuts, newCutData]}); setNewCut({ kit_id: '', floor: 'TER', material_name: '', cut_length: '', quantity_per_kit: '' }); } };
+            const handleUpdateCut = () => { if (!editingCut) return; const { id, floor, material_name, cut_length, quantity_per_kit } = editingCut; if(material_name && cut_length > 0 && quantity_per_kit > 0 && floor) { const updatedCuts = dbState.cuts.map(c => c.id === id ? {...editingCut, cut_length: parseFloat(String(cut_length).replace(',', '.'))} : c); handleUpdate({...dbState, cuts: updatedCuts}); setEditingCut(null); } };
+            const handleDeleteCut = (cutId) => { confirm({ message: "Excluir este corte?", onConfirm: () => { const updatedCuts = dbState.cuts.filter(c => c.id !== cutId); handleUpdate({...dbState, cuts: updatedCuts}); } }); };
+            const handleToggleCutSelection = (cutId) => { setSelectedCuts(prev => prev.includes(cutId) ? prev.filter(id => id !== cutId) : [...prev, cutId]); };
+            const handleDuplicateSelected = async (kitId) => {
+                const cutsToDuplicate = dbState.cuts.filter(c => selectedCuts.includes(c.id) && c.kit_id === kitId);
+                if (cutsToDuplicate.length === 0) return;
+                confirm({ message: `Duplicar ${cutsToDuplicate.length} corte(s) selecionado(s)?`, onConfirm: () => { let nextCutId = Math.max(0, ...dbState.cuts.map(c => c.id)) + 1; const newCuts = cutsToDuplicate.map(c => ({...c, id: nextCutId++})); handleUpdate({...dbState, cuts: [...dbState.cuts, ...newCuts]}); notify(`${cutsToDuplicate.length} corte(s) duplicado(s)!`); } });
+            };
+            const handleFileImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const bstr = evt.target.result; const wb = XLSX.read(bstr, { type: 'binary' }); const wsname = wb.SheetNames[0]; const ws = wb.Sheets[wsname]; const data = XLSX.utils.sheet_to_json(ws);
+                        if (data.length > 0 && 'kit_name' in data[0] && 'material_name' in data[0] && 'cut_length' in data[0] && 'quantity_per_kit' in data[0]) {
+                            confirm({ message: `Importar ${data.length} registros da planilha? Kits com nomes existentes serão atualizados.`, confirmText: "Importar", onConfirm: () => { 
+                                const updatedDb = {...dbState};
+                                const cutsByKitName = data.reduce((acc, cut) => { if (!acc[cut.kit_name]) { acc[cut.kit_name] = []; } acc[cut.kit_name].push(cut); return acc; }, {});
+                                for (const kitName in cutsByKitName) {
+                                    let kit = updatedDb.kits.find(k => k.name === kitName);
+                                    if (!kit) { const newId = Math.max(0, ...updatedDb.kits.map(k => k.id)) + 1; kit = { id: newId, name: kitName }; updatedDb.kits.push(kit); }
+                                    updatedDb.cuts = updatedDb.cuts.filter(c => c.kit_id !== kit.id);
+                                    let nextCutId = Math.max(0, ...updatedDb.cuts.map(c => c.id)) + 1;
+                                    cutsByKitName[kitName].forEach(cut => {
+                                        const floorName = String(cut.floor || "TODOS").toUpperCase();
+                                        const floorMapping = dbState.floors.find(f => f.name.toUpperCase() === floorName);
+                                        const floorId = floorMapping ? floorMapping.id : "TODOS";
+                                        updatedDb.cuts.push({ id: nextCutId++, kit_id: kit.id, floor: floorId, material_name: cut.material_name, cut_length: parseFloat(String(cut.cut_length).replace(',', '.')), quantity_per_kit: parseInt(cut.quantity_per_kit) });
+                                    });
+                                }
+                                handleUpdate(updatedDb);
+                                notify("Predefinições importadas com sucesso!"); 
+                            }});
+                        } else { notify("Formato de planilha inválido. Verifique os cabeçalhos das colunas.", "error"); }
+                    } catch (error) { notify("Erro ao ler a planilha.", "error"); console.error("Import Error:", error); }
+                };
+                reader.readAsBinaryString(file); e.target.value = '';
+            };
+
+            if (!dbState) return <div className="text-center p-10">Carregando...</div>;
+
+            return (
+                <div className="p-6 bg-white rounded-lg shadow-md space-y-8">
+                    <h2 className="text-2xl font-bold text-gray-800">Operações de Kits</h2>
+                    <div className="p-4 border rounded-lg space-y-4">
+                        <h3 className="font-semibold text-lg">Operações</h3>
+                        <div className="flex flex-wrap gap-2">
+                            <input type="text" value={newKitName} onChange={(e) => setNewKitName(e.target.value)} placeholder="Nome do novo kit" className="flex-grow p-2 border rounded-md" />
+                            <button onClick={handleAddNewKit} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Adicionar Kit</button>
+                            <button onClick={() => fileInputRef.current.click()} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700">Importar de Planilha</button>
+                            <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".xlsx, .xls, .csv" className="hidden" />
+                        </div>
+                        <p className="text-xs text-gray-500">Para importar, use uma planilha com o nome "PLANILHA DE OTIMIZADOR DE CORTE.xlsx" e as colunas: kit_name, floor, material_name, cut_length, quantity_per_kit.</p>
+                    </div>
+                    <div className="space-y-6">
+                        {dbState.kits.map(kit => {
+                            const cutsForThisKit = dbState.cuts.filter(c => c.kit_id === kit.id);
+                            const selectedCutsForThisKit = selectedCuts.filter(scId => cutsForThisKit.some(c => c.id === scId));
+                            return (
+                                <div key={kit.id} className="p-4 border border-gray-200 rounded-lg">
+                                    <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+                                        {editingKit && editingKit.id === kit.id ? (<div className="flex items-center gap-2 flex-grow"><input type="text" value={editingKit.name} onChange={(e) => setEditingKit({...editingKit, name: e.target.value})} className="font-bold text-xl text-gray-700 p-1 border rounded-md flex-grow" /></div>) : (<h3 className="font-bold text-xl text-gray-700">{kit.name}</h3>)}
+                                        <div className="flex items-center gap-3">
+                                            {editingKit && editingKit.id === kit.id ? (<><button onClick={handleUpdateKit} className="text-green-600 hover:text-green-800"><SvgIcon path="M4.5 12.75l6 6 9-13.5" className="w-5 h-5"/></button><button onClick={() => setEditingKit(null)} className="text-gray-500 hover:text-gray-700"><SvgIcon path="M6 18L18 6M6 6l12 12" className="w-5 h-5"/></button></>) : (<><button onClick={() => handleDuplicateKit(kit.id)} title="Duplicar Kit" className="text-purple-600 hover:text-purple-800"><SvgIcon path="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" className="w-5 h-5"/></button><button onClick={() => setEditingKit({id: kit.id, name: kit.name})} title="Editar Kit" className="text-blue-600 hover:text-blue-800"><SvgIcon path="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" className="w-5 h-5"/></button><button onClick={() => handleDeleteKit(kit.id)} title="Excluir Kit" className="text-red-600 hover:text-red-800"><SvgIcon path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" className="w-5 h-5"/></button></>)}
+                                        </div>
+                                    </div>
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-gray-50"><tr><th className="p-2 w-10"><input type="checkbox" disabled={cutsForThisKit.length === 0} onChange={() => { const allCutIds = cutsForThisKit.map(c => c.id); const allSelected = allCutIds.every(id => selectedCuts.includes(id)); setSelectedCuts(prev => allSelected ? prev.filter(id => !allCutIds.includes(id)) : [...new Set([...prev, ...allCutIds])]); }} checked={cutsForThisKit.length > 0 && cutsForThisKit.every(c => selectedCuts.includes(c.id))} /></th><th className="p-2">Pavimento</th><th className="p-2">Material</th><th className="p-2">Comprimento (m)</th><th className="p-2">Qtd/Kit</th><th className="p-2 w-28 text-center">Ações</th></tr></thead>
+                                        <tbody>
+                                            {cutsForThisKit.map(cut => (
+                                                editingCut && editingCut.id === cut.id ? (
+                                                    <tr key={cut.id} className="bg-blue-50">
+                                                        <td></td>
+                                                        <td className="p-1"><select value={editingCut.floor} onChange={e => setEditingCut({...editingCut, floor: e.target.value})} className="w-full p-1 border rounded"><option value="TODOS">TODOS</option>{dbState.floors.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></td>
+                                                        <td className="p-1"><input type="text" value={editingCut.material_name} onChange={e => setEditingCut({...editingCut, material_name: e.target.value})} className="w-full p-1 border rounded"/></td>
+                                                        <td className="p-1"><input type="text" value={editingCut.cut_length} onChange={e => setEditingCut({...editingCut, cut_length: e.target.value})} className="w-full p-1 border rounded no-spinner"/></td>
+                                                        <td className="p-1"><input type="number" value={editingCut.quantity_per_kit} onChange={e => setEditingCut({...editingCut, quantity_per_kit: e.target.value})} className="w-full p-1 border rounded no-spinner"/></td>
+                                                        <td className="p-1 text-center"><div className="flex justify-center gap-2"><button onClick={handleUpdateCut} className="text-green-600 hover:text-green-800"><SvgIcon path="M4.5 12.75l6 6 9-13.5" className="w-5 h-5"/></button><button onClick={() => setEditingCut(null)} className="text-red-600 hover:text-red-800"><SvgIcon path="M6 18L18 6M6 6l12 12" className="w-5 h-5"/></button></div></td>
+                                                    </tr>
+                                                ) : (
+                                                    <tr key={cut.id} className="border-b">
+                                                        <td className="p-2"><input type="checkbox" checked={selectedCuts.includes(cut.id)} onChange={() => handleToggleCutSelection(cut.id)} /></td>
+                                                        <td className="p-2">{dbState.floors.find(f => f.id === cut.floor)?.name || cut.floor}</td><td className="p-2">{cut.material_name}</td><td className="p-2">{cut.cut_length.toFixed(3)}</td><td className="p-2">{cut.quantity_per_kit}</td>
+                                                        <td className="p-2 text-center"><div className="flex justify-center gap-2"><button onClick={() => setEditingCut({...cut})} className="text-blue-600 hover:text-blue-800"><SvgIcon path="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M12 15v5.25" className="w-5 h-5"/></button><button onClick={() => handleDeleteCut(cut.id)} className="text-red-600 hover:text-red-800"><SvgIcon path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" className="w-5 h-5"/></button></div></td>
+                                                    </tr>
+                                                )
+                                            ))}
+                                            <tr className="bg-gray-100">
+                                                <td></td>
+                                                <td className="p-1"><select value={newCut.floor} onChange={e => setNewCut({...newCut, floor: e.target.value})} className="w-full p-1 border rounded"><option value="TODOS">TODOS</option>{dbState.floors.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></td>
+                                                <td className="p-1"><input type="text" placeholder="Ex: Tubo 50mm" value={newCut.material_name} onChange={e => setNewCut({...newCut, material_name: e.target.value})} className="w-full p-1 border rounded"/></td>
+                                                <td className="p-1"><input type="text" placeholder="1.55" value={newCut.cut_length} onChange={e => setNewCut({...newCut, cut_length: e.target.value})} className="w-full p-1 border rounded no-spinner"/></td>
+                                                <td className="p-1"><input type="number" placeholder="3" value={newCut.quantity_per_kit} onChange={e => setNewCut({...newCut, quantity_per_kit: e.target.value})} className="w-full p-1 border rounded no-spinner"/></td>
+                                                <td className="p-1 text-center"><button onClick={() => handleAddNewCut(kit.id)} className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 w-full">Adicionar</button></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    {selectedCutsForThisKit.length > 0 && (<div className="mt-4 flex justify-end"><button onClick={() => handleDuplicateSelected(kit.id)} className="px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700">Duplicar {selectedCutsForThisKit.length} selecionado(s)</button></div>)}
+                                </div>
+                            )})}
+                    </div>
+                </div>
+            );
+        }
+
+        function ScrapsManager({ dbState, onDbChange }) {
+            const { notify, confirm } = useAppContext();
+
+            const handleDelete = (id) => {
+                confirm({ message: "Excluir esta sobra?", onConfirm: () => { 
+                    const updatedScraps = dbState.scraps.filter(s => s.id !== id);
+                    const updatedDb = {...dbState, scraps: updatedScraps };
+                    db.saveData(updatedDb);
+                    onDbChange(updatedDb);
+                    notify("Sobra excluída.", "error"); 
+                }});
+            };
+
+            return (
+                <div className="p-6 bg-white rounded-lg shadow-md">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Gerenciar Sobras</h2>
+                    {dbState.scraps.length === 0 ? <p>Nenhuma sobra em estoque.</p> : (
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50"><tr><th className="p-2">Material</th><th className="p-2">Comprimento (m)</th><th className="p-2">Ações</th></tr></thead>
+                            <tbody>
+                                {dbState.scraps.map(scrap => (
+                                    <tr key={scrap.id} className="border-b">
+                                        <td className="p-2">{scrap.material_name}</td>
+                                        <td className="p-2">{scrap.length.toFixed(3)}</td>
+                                        <td className="p-2"><button onClick={() => handleDelete(scrap.id)} className="text-red-500 hover:text-red-700"><SvgIcon path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" className="w-5 h-5"/></button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            );
+        }
+        
+        function ManagementManager({ dbState, onDbChange }) {
+            const [materialLengths, setMaterialLengths] = useState(dbState.config.material_lengths);
+            const [newMaterial, setNewMaterial] = useState({ material_name: '', length: '' });
+            const { notify } = useAppContext();
+
+            const handleUpdate = (updatedLengths) => {
+                const updatedDb = { ...dbState, config: { ...dbState.config, material_lengths: updatedLengths } };
+                db.saveData(updatedDb);
+                onDbChange(updatedDb);
+            };
+
+            const handleLengthChange = (id, newLength) => {
+                const updated = materialLengths.map(m => m.id === id ? { ...m, length: newLength } : m);
+                setMaterialLengths(updated);
+            };
+
+            const handleSaveAll = () => {
+                const parsedLengths = materialLengths.map(m => ({
+                    ...m,
+                    length: parseFloat(String(m.length).replace(',', '.')) || 0
+                }));
+                handleUpdate(parsedLengths);
+                notify("Tamanhos de barra salvos!");
+            };
+
+            const handleAddNew = () => {
+                if (newMaterial.material_name.trim() && String(newMaterial.length).trim()) {
+                    const newId = Math.max(0, ...materialLengths.map(m => m.id)) + 1;
+                    const newItem = { 
+                        id: newId, 
+                        material_name: newMaterial.material_name,
+                        length: newMaterial.length
+                    };
+                    const updated = [...materialLengths, newItem];
+                    setMaterialLengths(updated);
+                    setNewMaterial({ material_name: '', length: '' });
+                    notify("Novo material adicionado à lista. Clique em 'Salvar Alterações' para confirmar.");
+                }
+            };
+            
+            const handleDelete = (id) => {
+                const updated = materialLengths.filter(m => m.id !== id);
+                setMaterialLengths(updated);
+                notify("Material removido da lista. Clique em 'Salvar Alterações' para confirmar.", "error");
+            };
+
+            return (
+                <div className="p-6 bg-white rounded-lg shadow-md space-y-8">
+                    <h2 className="text-2xl font-bold text-gray-800">Gerenciar Tamanhos de Barra por Material</h2>
+                    <div className="space-y-4">
+                        {materialLengths.map(mat => (
+                            <div key={mat.id} className="grid grid-cols-3 gap-4 items-center">
+                                <span className="font-medium text-gray-700">{mat.material_name}</span>
+                                <input 
+                                    type="text" 
+                                    value={mat.length} 
+                                    onChange={(e) => handleLengthChange(mat.id, e.target.value)}
+                                    className="p-2 border rounded-md"
+                                />
+                                <button onClick={() => handleDelete(mat.id)} className="text-red-500 hover:text-red-700 justify-self-start">
+                                    <SvgIcon path="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" className="w-5 h-5"/>
+                                </button>
+                            </div>
+                        ))}
+                        <div className="grid grid-cols-3 gap-4 items-center pt-4 border-t">
+                            <input type="text" value={newMaterial.material_name} onChange={e => setNewMaterial({...newMaterial, material_name: e.target.value})} placeholder="Novo Material" className="p-2 border rounded-md" />
+                            <input type="text" value={newMaterial.length} onChange={e => setNewMaterial({...newMaterial, length: e.target.value})} placeholder="Comprimento" className="p-2 border rounded-md" />
+                            <button onClick={handleAddNew} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 justify-self-start">Adicionar</button>
+                        </div>
+                    </div>
+                     <div className="flex justify-end">
+                        <button onClick={handleSaveAll} className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">Salvar Alterações</button>
+                    </div>
+                </div>
+            );
+        }
+
+
+        function AppContent() {
+            const [view, setView] = useState('calculator');
+            const [results, setResults] = useState(null);
+            const [productionList, setProductionList] = useState([]);
+            const [isLoading, setIsLoading] = useState(false);
+            const [labelTemplate, setLabelTemplate] = useState("{kit_name}\n{floor_name}\n{material_name}\nCorte: {cut_length}m");
+            const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+            const { notify, confirm } = useAppContext();
+            const [dbState, setDbState] = useState(db.getData());
+
+            const handleDbChange = (newData) => {
+                setDbState(newData);
+            };
+
+            const handleCalculate = async (prodList) => {
+                setIsLoading(true); setProductionList(prodList); const allRequiredCuts = {};
+                const allCuts = dbState.cuts;
+                for (const item of prodList) {
+                    const cutsForKit = allCuts.filter(c => c.kit_id === item.kit_id);
+                    const relevantCuts = cutsForKit.filter(c => c.floor === item.floor_id || c.floor === 'TODOS');
+                    for (const cut of relevantCuts) {
+                        if (!allRequiredCuts[cut.material_name]) allRequiredCuts[cut.material_name] = [];
+                        const totalPieces = item.quantity * cut.quantity_per_kit;
+                        const piecesToCreate = Math.ceil(totalPieces);
+                        if (piecesToCreate > 0) {
+                           allRequiredCuts[cut.material_name].push(...Array(piecesToCreate).fill(cut.cut_length));
+                        }
+                    }
+                }
+                const optimizationResults = {}; 
+                const availableScraps = dbState.scraps;
+                for (const materialName in allRequiredCuts) {
+                    const requiredCutsForMaterial = allRequiredCuts[materialName];
+                    const totalCutsSummary = requiredCutsForMaterial.reduce((acc, cut) => {
+                        acc[cut] = (acc[cut] || 0) + 1;
+                        return acc;
+                    }, {});
+
+                    const barLengthConfig = dbState.config.material_lengths.find(m => m.material_name === materialName) || dbState.config.material_lengths.find(m => m.material_name === "Padrão");
+                    const barLength = barLengthConfig.length;
+
+                    const scrapsForMaterial = availableScraps.filter(s => s.material_name === materialName);
+                    const { usedBars, newScraps, remainingScraps } = optimizeCutsBFD(barLength, requiredCutsForMaterial, scrapsForMaterial);
+                    
+                    const groupedBars = usedBars.reduce((acc, bar) => {
+                        const patternKey = [...bar.cuts].sort((a, b) => a - b).join(',');
+                        const existingPattern = acc.find(p => p.key === patternKey);
+                        if (existingPattern) {
+                            existingPattern.quantity++;
+                        } else {
+                            acc.push({ key: patternKey, pattern: bar.cuts, waste: bar.waste, quantity: 1 });
+                        }
+                        return acc;
+                    }, []);
+
+                    optimizationResults[materialName] = { totalCutsSummary, groupedBars, newScraps, barLength };
+                }
+                setResults(optimizationResults); setIsLoading(false); notify("Cálculo concluído com sucesso!");
+                setTimeout(() => document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' }), 100);
+            };
+
+            const generateLabelsPDF = () => {
+                const labelDoc = new jsPDF();
+                labelDoc.setFontSize(16); labelDoc.text("Etiquetas para Cortes", 14, 22);
+                let y = 30; const pageMargin = 10; const labelWidth = 60; const labelHeight = 40; const xGap = 5; const yGap = 5; let x = pageMargin;
+                for (const materialName in results) {
+                    for (const bar of results[materialName].groupedBars) {
+                        for(let i = 0; i < bar.quantity; i++) {
+                            for (const cutLength of bar.pattern) {
+                                if (x + labelWidth > labelDoc.internal.pageSize.getWidth() - pageMargin) { x = pageMargin; y += labelHeight + yGap; }
+                                if (y + labelHeight > labelDoc.internal.pageSize.getHeight() - pageMargin) { labelDoc.addPage(); y = pageMargin; x = pageMargin; }
+                                const text = labelTemplate.replace("{kit_name}", "Vários").replace("{floor_name}", "Vários").replace("{material_name}", materialName).replace("{cut_length}", cutLength.toFixed(3));
+                                labelDoc.rect(x, y, labelWidth, labelHeight); labelDoc.setFontSize(8); labelDoc.text(text, x + 3, y + 5, { maxWidth: labelWidth - 6 });
+                                x += labelWidth + xGap;
+                            }
+                        }
+                    }
+                }
+                labelDoc.save('etiquetas_de_corte.pdf');
+                notify("PDF de etiquetas gerado!");
+            };
+            
+            const handleExportPDF = () => {
+                if (!results) { notify("Nenhum resultado para exportar.", "error"); return; }
+                const doc = new jsPDF();
+                doc.setFontSize(18); doc.text("Plano de Otimização de Cortes", 14, 22); doc.setFontSize(11); doc.setTextColor(100); doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 30);
+                doc.autoTable({ startY: 40, head: [['Kit', 'Pavimento', 'Quantidade']], body: productionList.map(item => [item.kit_name, item.floor_name, item.quantity]), theme: 'grid', headStyles: { fillColor: [22, 160, 133] } });
+                let finalY = doc.autoTable.previous.finalY + 15;
+                const totalBars = Object.values(results).reduce((sum, p) => sum + p.groupedBars.reduce((acc, bar) => acc + bar.quantity, 0), 0);
+                doc.setFontSize(14); doc.text("Resumo Geral", 14, finalY); doc.setFontSize(11);
+                doc.text(`- Total de Barras Novas Necessárias: ${totalBars}`, 14, finalY + 7);
+                finalY += 15;
+                
+                const canvases = document.querySelectorAll('#results-section canvas');
+                let canvasIndex = 0;
+
+                for (const materialName in results) {
+                    const plan = results[materialName];
+                    if (finalY > 220) { doc.addPage(); finalY = 20; }
+                    doc.setFontSize(14); doc.setFont(undefined, 'bold');
+                    doc.text(`Plano de Corte para: ${materialName}`, 14, finalY);
+                    finalY += 10;
+
+                    doc.setFontSize(10); doc.setFont(undefined, 'normal');
+                    let summaryText = 'Resumo de Peças a Cortar:\n';
+                    for (const [length, qty] of Object.entries(plan.totalCutsSummary).sort(([a],[b]) => b - a)) {
+                        summaryText += `- ${qty} peça(s) de ${parseFloat(length).toFixed(3)}m\n`;
+                    }
+                    const splitText = doc.splitTextToSize(summaryText, doc.internal.pageSize.getWidth() - 28);
+                    doc.text(splitText, 14, finalY);
+                    finalY += (splitText.length * 5) + 5;
+
+                    for (const bar of plan.groupedBars) {
+                        if (finalY > 250) { doc.addPage(); finalY = 20; }
+                        doc.setFontSize(10); doc.setFont(undefined, 'bold');
+                        doc.text(`Modelo de Corte (Repetir ${bar.quantity}x)`, 14, finalY);
+                        finalY += 5;
+                        const canvas = canvases[canvasIndex++];
+                        if (canvas) {
+                            const imgData = canvas.toDataURL('image/png');
+                            const imgProps = doc.getImageProperties(imgData);
+                            const pdfWidth = doc.internal.pageSize.getWidth() - 28;
+                            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                            doc.addImage(imgData, 'PNG', 14, finalY, pdfWidth, pdfHeight);
+                            finalY += pdfHeight + 10;
+                        }
+                    }
+                }
+                
+                doc.save('plano_de_corte.pdf');
+                notify("Plano de corte em PDF gerado!");
+
+                confirm({ 
+                    message: "Deseja gerar um PDF separado contendo apenas as etiquetas de corte?", 
+                    onConfirm: generateLabelsPDF, 
+                    confirmText: "Sim, gerar" 
+                });
+            };
+
+            const handleExportCSV = () => {
+                if (!results) { notify("Nenhum resultado para exportar.", "error"); return; }
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Material,Nº do Modelo,Repetições,Comprimentos dos Cortes,Sobra (m)\r\n";
+                Object.entries(results).forEach(([materialName, plan]) => {
+                    plan.groupedBars.forEach((bar, index) => {
+                        const cuts = bar.pattern.join('m; ');
+                        const row = [materialName, index + 1, bar.quantity, `"${cuts}m"`, bar.waste.toFixed(3)].join(',');
+                        csvContent += row + "\r\n";
+                    });
+                });
+                const encodedUri = encodeURI(csvContent); const link = document.createElement("a");
+                link.setAttribute("href", encodedUri); link.setAttribute("download", "plano_de_corte.csv");
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                notify("CSV exportado com sucesso!");
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                    <header className="bg-white shadow-md">
+                        <div className="container mx-auto px-4 py-4 flex flex-wrap justify-between items-center">
+                            <div className="flex items-center gap-3"><SvgIcon path="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.47 2.118v-.878a3.75 3.75 0 013.649-3.649l2.101-.063zM12 15.75h3m-3 0h-3m0-6h.008v.008H9V9.75zm.75 3.75l.008.008H12v-.008h-.242zm-3.75 0l.008.008H6v-.008H5.758z" className="w-8 h-8 text-indigo-600" /><h1 className="text-2xl font-bold text-gray-800">Otimizador de Cortes</h1></div>
+                            <nav className="flex gap-2 mt-4 sm:mt-0"><button onClick={() => setView('calculator')} className={`px-4 py-2 rounded-md font-semibold ${view === 'calculator' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>Calculadora</button><button onClick={() => setView('operations')} className={`px-4 py-2 rounded-md font-semibold ${view === 'operations' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>Operações</button><button onClick={() => setView('management')} className={`px-4 py-2 rounded-md font-semibold ${view === 'management' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>Gerenciamento</button><button onClick={() => setView('scraps')} className={`px-4 py-2 rounded-md font-semibold ${view === 'scraps' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>Sobras</button></nav>
+                        </div>
+                    </header>
+                    <main className="container mx-auto p-4 md:p-8">
+                        {isLoading && (<div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50"><div className="text-center"><div className="w-16 h-16 border-4 border-t-4 border-t-indigo-600 border-gray-200 rounded-full animate-spin"></div><p className="mt-4 text-lg font-semibold text-gray-700">Calculando...</p></div></div>)}
+                        {isLabelModalOpen && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                                <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                                    <h3 className="text-lg font-bold mb-4">Editar Modelo da Etiqueta</h3>
+                                    <p className="text-sm text-gray-600 mb-2">Use os placeholders: {"{kit_name}"}, {"{floor_name}"}, {"{material_name}"}, {"{cut_length}"}</p>
+                                    <textarea value={labelTemplate} onChange={(e) => setLabelTemplate(e.target.value)} rows="5" className="w-full p-2 border rounded-md"></textarea>
+                                    <div className="mt-4 flex justify-end gap-2">
+                                        <button onClick={() => setIsLabelModalOpen(false)} className="px-4 py-2 bg-gray-300 rounded-md">Cancelar</button>
+                                        <button onClick={() => { setIsLabelModalOpen(false); notify("Modelo de etiqueta salvo!"); }} className="px-4 py-2 bg-indigo-600 text-white rounded-md">Salvar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {view === 'calculator' && (<div><Calculator dbState={dbState} onCalculate={handleCalculate} /><ResultsDisplay results={results} onExportPDF={handleExportPDF} onExportCSV={handleExportCSV} /></div>)}
+                        {view === 'operations' && <OperationsManager dbState={dbState} onDbChange={handleDbChange} />}
+                        {view === 'management' && <ManagementManager dbState={dbState} onDbChange={handleDbChange} />}
+                        {view === 'scraps' && <ScrapsManager dbState={dbState} onDbChange={handleDbChange} />}
+                    </main>
+                    <footer className="text-center py-4 mt-8 text-gray-500 text-sm"><p>Desenvolvido com React e Tailwind CSS. © {new Date().getFullYear()}</p><button onClick={() => setIsLabelModalOpen(true)} className="text-indigo-600 hover:underline">Configurar Etiqueta</button></footer>
+                </div>
+            );
+        }
+        
+        function App() {
+            return (
+                <AppProvider>
+                    <AppContent />
+                </AppProvider>
+            );
+        }
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
