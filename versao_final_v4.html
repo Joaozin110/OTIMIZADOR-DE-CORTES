@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otimizador de Cortes Hidráulicos - Tigre BIM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-tigre {
+            background: white;
+            color: #1e40af;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 800;
+        }
+
+        .bim-badge {
+            background: #f97316;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 120px);
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .sidebar {
+            width: 380px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+
+        .sidebar-section {
+            padding: 1.5rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-section h3 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-icon {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+
+        .categoria-filter {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            color: #64748b;
+        }
+
+        .filter-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .filter-btn:hover {
+            background: #f1f5f9;
+            color: #3b82f6;
+            transform: translateY(-1px);
+        }
+
+        .filter-btn.active:hover {
+            background: #2563eb;
+        }
+
+        .pecas-grid {
+            display: grid;
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .pecas-grid::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .pecas-grid::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+
+        .pecas-grid::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        .peca-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: grab;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .peca-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--peca-color, #3b82f6);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .peca-item:hover {
+            background: white;
+            border-color: var(--peca-color, #3b82f6);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .peca-item:hover::before {
+            opacity: 1;
+        }
+
+        .peca-item:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+
+        .peca-svg {
+            width: 60px;
+            height: 60px;
+            margin-right: 1rem;
+            flex-shrink: 0;
+            background: white;
+            border-radius: 8px;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .peca-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .peca-nome {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #0f172a;
+            margin-bottom: 0.25rem;
+        }
+
+        .peca-detalhes {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+
+        .peca-codigo {
+            font-family: 'Courier New', monospace;
+            font-size: 0.7rem;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+
+        .peca-preco {
+            font-weight: 600;
+            color: #059669;
+            font-size: 0.875rem;
+        }
+
+        .canvas-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+
+        .canvas-header {
+            background: #f8fafc;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .canvas-title {
+            font-weight: 600;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .canvas-tools {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tool-btn {
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #64748b;
+            font-size: 1rem;
+        }
+
+        .tool-btn:hover {
+            background: #f1f5f9;
+            color: #3b82f6;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .tool-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .canvas-area {
+            width: 100%;
+            height: calc(100% - 70px);
+            background: 
+                radial-gradient(circle at 1px 1px, #e2e8f0 1px, transparent 0);
+            background-size: 20px 20px;
+            position: relative;
+            overflow: auto;
+            min-height: 500px;
+        }
+
+        .canvas-peca {
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            border-radius: 8px;
+            padding: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+        }
+
+        .canvas-peca:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .canvas-peca.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .canvas-peca.dragging {
+            z-index: 1000;
+            transform: scale(1.1);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .lista-materiais {
+            background: #f8fafc;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .material-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .material-item:hover {
+            background: #f1f5f9;
+            border-color: #3b82f6;
+        }
+
+        .material-info {
+            flex: 1;
+        }
+
+        .material-nome {
+            font-weight: 500;
+            color: #0f172a;
+            margin-bottom: 0.25rem;
+        }
+
+        .material-codigo {
+            font-family: 'Courier New', monospace;
+            font-size: 0.7rem;
+            color: #64748b;
+        }
+
+        .material-qtd {
+            background: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .total-custo {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-radius: 10px;
+            font-weight: 700;
+            color: #1e40af;
+            text-align: center;
+            border: 1px solid #93c5fd;
+            font-size: 1.125rem;
+        }
+
+        /* Cores específicas das peças por categoria */
+        .peca-esgoto { --peca-color: #64748b; }
+        .peca-irrigacao { --peca-color: #0ea5e9; }
+        .peca-soldavel { --peca-color: #92400e; }
+        .peca-caixa-dagua { --peca-color: #059669; }
+        .peca-agua-fria { --peca-color: #3b82f6; }
+
+        /* Modal para alertas */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            transform: scale(0.9);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-body {
+            color: #64748b;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        .btn-modal {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-modal-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-modal-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-modal-secondary {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .btn-modal-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        /* Responsividade */
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+                height: auto;
+                min-height: calc(100vh - 120px);
+            }
+            
+            .sidebar {
+                width: 100%;
+                order: 2;
+            }
+            
+            .canvas-container {
+                height: 400px;
+                order: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.25rem;
+            }
+            
+            .main-container {
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+            
+            .btn {
+                font-size: 0.75rem;
+                padding: 0.5rem 1rem;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            .canvas-area {
+                min-height: 300px;
+            }
+        }
+
+        /* Animações */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .peca-item {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Estados de loading */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>
+                <span class="logo-tigre">TIGRE</span>
+                <span class="bim-badge">BIM</span>
+                Otimizador de Cortes Hidráulicos
+            </h1>
+            <div class="header-buttons">
+                <button class="btn btn-primary" onclick="novaObra()">
+                    📋 Nova Obra
+                </button>
+                <button class="btn btn-primary" onclick="importarDWG()">
+                    📁 Importar DWG
+                </button>
+                <button class="btn btn-success" onclick="calcularMateriais()">
+                    🧮 Calcular
+                </button>
+                <button class="btn btn-primary" onclick="exportarPDF()">
+                    📄 Exportar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>
+                    <span class="section-icon">🏗️</span>
+                    Catálogo Tigre BIM
+                </h3>
+                <div class="categoria-filter">
+                    <button class="filter-btn active" data-categoria="todas">Todas</button>
+                    <button class="filter-btn" data-categoria="esgoto">Esgoto</button>
+                    <button class="filter-btn" data-categoria="irrigacao">Irrigação</button>
+                    <button class="filter-btn" data-categoria="soldavel">Soldável</button>
+                    <button class="filter-btn" data-categoria="caixa-dagua">Caixa D'Água</button>
+                </div>
+                <div id="pecas-disponiveis" class="pecas-grid">
+                    <!-- Peças serão carregadas aqui -->
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>
+                    <span class="section-icon">📊</span>
+                    Lista de Materiais
+                </h3>
+                <div id="lista-materiais" class="lista-materiais">
+                    <div class="material-item">
+                        <div class="material-info">
+                            <div class="material-nome">Nenhuma peça adicionada</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="total-custo" id="total-custo">
+                    💰 Total: R$ 0,00
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-header">
+                <div class="canvas-title">
+                    🎯 Área de Projeto BIM
+                </div>
+                <div class="canvas-tools">
+                    <button class="tool-btn" title="Selecionar" onclick="setTool('select')">↖️</button>
+                    <button class="tool-btn" title="Mover" onclick="setTool('move')">✋</button>
+                    <button class="tool-btn" title="Rotacionar" onclick="setTool('rotate')">🔄</button>
+                    <button class="tool-btn" title="Excluir" onclick="excluirSelecionada()">🗑️</button>
+                </div>
+            </div>
+            <div class="canvas-area" id="canvas-area">
+                <!-- Peças do projeto serão adicionadas aqui -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para alertas -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header" id="modal-header">
+                📊 Informação
+            </div>
+            <div class="modal-body" id="modal-body">
+                Conteúdo do modal
+            </div>
+            <div class="modal-footer">
+                <button class="btn-modal btn-modal-primary" onclick="fecharModal()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Catálogo completo baseado no Tigre BIM oficial
+        const pecasDisponiveis = [
+            // ESGOTO REDUX - Linha Premium
+            {
+                id: 'cap-esg-redux-dn40',
+                nome: 'Cap Esgoto Redux DN40',
+                categoria: 'esgoto',
+                preco: 8.50,
+                codigo: '100002791',
+                especificacao: 'DN40 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 40,
+                altura: 40,
+                svg: `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="capEsgotoGrad" cx="50%" cy="30%" r="70%">
+                            <stop offset="0%" style="stop-color:#e2e8f0;stop-opacity:1" />
+                            <stop offset="70%" style="stop-color:#cbd5e1;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#94a3b8;stop-opacity:1" />
+                        </radialGradient>
+                    </defs>
+                    <circle cx="20" cy="20" r="16" fill="url(#capEsgotoGrad)" stroke="#64748b" stroke-width="1"/>
+                    <rect x="16" y="32" width="8" height="6" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="20" cy="20" r="12" fill="none" stroke="#64748b" stroke-width="1"/>
+                    <circle cx="20" cy="20" r="2" fill="#64748b"/>
+                    <text x="20" y="23" font-family="Arial" font-size="4" fill="#475569" text-anchor="middle">DN40</text>
+                </svg>`
+            },
+            {
+                id: 'cap-esg-redux-dn50',
+                nome: 'Cap Esgoto Redux DN50',
+                categoria: 'esgoto',
+                preco: 10.20,
+                codigo: '100002792',
+                especificacao: 'DN50 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 50,
+                altura: 50,
+                svg: `<svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="25" cy="25" r="20" fill="#e2e8f0" stroke="#64748b" stroke-width="1"/>
+                    <rect x="20" y="40" width="10" height="8" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="25" cy="25" r="15" fill="none" stroke="#64748b" stroke-width="1"/>
+                    <circle cx="25" cy="25" r="3" fill="#64748b"/>
+                    <text x="25" y="28" font-family="Arial" font-size="5" fill="#475569" text-anchor="middle">DN50</text>
+                </svg>`
+            },
+            {
+                id: 'joelho-45-redux-dn100',
+                nome: 'Joelho 45° Redux DN100',
+                categoria: 'esgoto',
+                preco: 28.50,
+                codigo: '100002798',
+                especificacao: 'DN100 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 80,
+                altura: 60,
+                svg: `<svg viewBox="0 0 80 60" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="joelho45Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#e2e8f0;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#cbd5e1;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#94a3b8;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 10 45 Q 30 25 70 35" fill="none" stroke="url(#joelho45Grad)" stroke-width="12" stroke-linecap="round"/>
+                    <rect x="5" y="40" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="65" y="30" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="10" cy="45" r="4" fill="none" stroke="#64748b" stroke-width="1"/>
+                    <circle cx="70" cy="35" r="4" fill="none" stroke="#64748b" stroke-width="1"/>
+                    <text x="40" y="25" font-family="Arial" font-size="7" fill="#475569" text-anchor="middle">45°</text>
+                </svg>`
+            },
+            {
+                id: 'joelho-90-redux-dn100',
+                nome: 'Joelho 90° Redux DN100',
+                categoria: 'esgoto',
+                preco: 32.80,
+                codigo: '100002799',
+                especificacao: 'DN100 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 90,
+                altura: 90,
+                svg: `<svg viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 15 15 Q 15 15 15 45 Q 15 75 45 75 Q 75 75 75 75" 
+                          fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+                    <rect x="10" y="40" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="70" y="70" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="15" cy="45" r="5" fill="none" stroke="#64748b" stroke-width="1"/>
+                    <circle cx="75" cy="75" r="5" fill="none" stroke="#64748b" stroke-width="1"/>
+                    <text x="40" y="40" font-family="Arial" font-size="8" fill="#475569" text-anchor="middle">90°</text>
+                    <text x="45" y="55" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">DN100</text>
+                </svg>`
+            },
+            {
+                id: 'te-90-redux-dn100',
+                nome: 'Tê 90° Redux DN100',
+                categoria: 'esgoto',
+                preco: 45.60,
+                codigo: '100002804',
+                especificacao: 'DN100 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 90,
+                altura: 90,
+                svg: `<svg viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="40" width="70" height="10" fill="#e2e8f0" stroke="#64748b" stroke-width="1"/>
+                    <rect x="40" y="10" width="10" height="70" fill="#e2e8f0" stroke="#64748b" stroke-width="1"/>
+                    <rect x="8" y="38" width="4" height="14" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="78" y="38" width="4" height="14" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="38" y="8" width="14" height="4" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="12" cy="45" r="3" fill="#64748b"/>
+                    <circle cx="78" cy="45" r="3" fill="#64748b"/>
+                    <circle cx="45" cy="12" r="3" fill="#64748b"/>
+                    <text x="45" y="50" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">DN100</text>
+                </svg>`
+            },
+            {
+                id: 'juncao-simp-redux-dn100',
+                nome: 'Junção Simples Redux DN100',
+                categoria: 'esgoto',
+                preco: 38.90,
+                codigo: '100002800',
+                especificacao: 'DN100 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 80,
+                altura: 60,
+                svg: `<svg viewBox="0 0 80 60" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 10 30 L 60 30 L 70 45" fill="none" stroke="#e2e8f0" stroke-width="10"/>
+                    <rect x="5" y="25" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="55" y="25" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="65" y="40" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="10" cy="30" r="3" fill="#64748b"/>
+                    <circle cx="60" cy="30" r="3" fill="#64748b"/>
+                    <circle cx="70" cy="45" r="3" fill="#64748b"/>
+                    <text x="35" y="25" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">JUNÇÃO</text>
+                </svg>`
+            },
+
+            // TUBOS ESGOTO REDUX
+            {
+                id: 'tubo-esg-redux-dn40',
+                nome: 'Tubo Esgoto Redux 6M DN40',
+                categoria: 'esgoto',
+                preco: 18.50,
+                codigo: '100002786',
+                especificacao: 'DN40 6M',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 120,
+                altura: 20,
+                svg: `<svg viewBox="0 0 120 20" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="2" width="116" height="16" fill="#e2e8f0" 
+                          stroke="#64748b" stroke-width="1" rx="2"/>
+                    <rect x="0" y="4" width="4" height="12" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="116" y="4" width="4" height="12" fill="#94a3b8" stroke="#64748b"/>
+                    <line x1="10" y1="4" x2="10" y2="16" stroke="#64748b" stroke-width="1"/>
+                    <line x1="110" y1="4" x2="110" y2="16" stroke="#64748b" stroke-width="1"/>
+                    <text x="60" y="12" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">TIGRE DN40 6M</text>
+                </svg>`
+            },
+            {
+                id: 'tubo-esg-redux-dn50',
+                nome: 'Tubo Esgoto Redux 6M DN50',
+                categoria: 'esgoto',
+                preco: 22.80,
+                codigo: '100002787',
+                especificacao: 'DN50 6M',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 120,
+                altura: 25,
+                svg: `<svg viewBox="0 0 120 25" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="3" width="116" height="19" fill="#e2e8f0" 
+                          stroke="#64748b" stroke-width="1" rx="3"/>
+                    <rect x="0" y="5" width="4" height="15" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="116" y="5" width="4" height="15" fill="#94a3b8" stroke="#64748b"/>
+                    <text x="60" y="14" font-family="Arial" font-size="7" fill="#475569" text-anchor="middle">TIGRE DN50 6M</text>
+                </svg>`
+            },
+            {
+                id: 'tubo-esg-redux-dn75',
+                nome: 'Tubo Esgoto Redux 6M DN75',
+                categoria: 'esgoto',
+                preco: 35.20,
+                codigo: '100002788',
+                especificacao: 'DN75 6M',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 120,
+                altura: 30,
+                svg: `<svg viewBox="0 0 120 30" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="4" width="116" height="22" fill="#e2e8f0" 
+                          stroke="#64748b" stroke-width="1" rx="4"/>
+                    <rect x="0" y="6" width="4" height="18" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="116" y="6" width="4" height="18" fill="#94a3b8" stroke="#64748b"/>
+                    <text x="60" y="17" font-family="Arial" font-size="8" fill="#475569" text-anchor="middle">TIGRE DN75 6M</text>
+                </svg>`
+            },
+            {
+                id: 'tubo-esg-redux-dn100',
+                nome: 'Tubo Esgoto Redux 6M DN100',
+                categoria: 'esgoto',
+                preco: 48.90,
+                codigo: '100002789',
+                especificacao: 'DN100 6M',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 120,
+                altura: 35,
+                svg: `<svg viewBox="0 0 120 35" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="5" width="116" height="25" fill="#e2e8f0" 
+                          stroke="#64748b" stroke-width="1" rx="5"/>
+                    <rect x="0" y="8" width="4" height="19" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="116" y="8" width="4" height="19" fill="#94a3b8" stroke="#64748b"/>
+                    <text x="60" y="19" font-family="Arial" font-size="9" fill="#475569" text-anchor="middle">TIGRE DN100 6M</text>
+                </svg>`
+            },
+
+            // CURVAS ESGOTO
+            {
+                id: 'curva-87-redux-dn150',
+                nome: 'Curva 87°30" Redux DN150',
+                categoria: 'esgoto',
+                preco: 85.60,
+                codigo: '100002793',
+                especificacao: 'DN150 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 100,
+                altura: 80,
+                svg: `<svg viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 15 65 Q 25 25 85 35" fill="none" stroke="#94a3b8" stroke-width="15" stroke-linecap="round"/>
+                    <rect x="10" y="60" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="80" y="30" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <text x="50" y="25" font-family="Arial" font-size="8" fill="#475569" text-anchor="middle">87°30"</text>
+                    <text x="50" y="70" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">DN150</text>
+                </svg>`
+            },
+            {
+                id: 'curva-90-pb-dn50',
+                nome: 'Curva 90° PB Redux DN50',
+                categoria: 'esgoto',
+                preco: 24.30,
+                codigo: '100002794',
+                especificacao: 'DN50 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 70,
+                altura: 70,
+                svg: `<svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 10 10 Q 10 10 10 35 Q 10 60 35 60 Q 60 60 60 60" 
+                          fill="none" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+                    <rect x="5" y="30" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="55" y="55" width="10" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <text x="30" y="30" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">90° PB</text>
+                </svg>`
+            },
+
+            // LUVAS
+            {
+                id: 'luva-simp-redux-dn75',
+                nome: 'Luva Simples Redux DN75',
+                categoria: 'esgoto',
+                preco: 16.80,
+                codigo: '100002801',
+                especificacao: 'DN75 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 60,
+                altura: 30,
+                svg: `<svg viewBox="0 0 60 30" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="5" y="8" width="50" height="14" fill="#e2e8f0" stroke="#64748b" stroke-width="1" rx="7"/>
+                    <rect x="2" y="10" width="6" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="52" y="10" width="6" height="10" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="8" cy="15" r="2" fill="#64748b"/>
+                    <circle cx="52" cy="15" r="2" fill="#64748b"/>
+                    <text x="30" y="17" font-family="Arial" font-size="6" fill="#475569" text-anchor="middle">LUVA DN75</text>
+                </svg>`
+            },
+            {
+                id: 'luva-simp-redux-dn100',
+                nome: 'Luva Simples Redux DN100',
+                categoria: 'esgoto',
+                preco: 22.40,
+                codigo: '100002802',
+                especificacao: 'DN100 CB',
+                aplicacao: 'Esgoto primário',
+                cor: 'esgoto',
+                largura: 70,
+                altura: 35,
+                svg: `<svg viewBox="0 0 70 35" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="5" y="10" width="60" height="15" fill="#e2e8f0" stroke="#64748b" stroke-width="1" rx="7"/>
+                    <rect x="2" y="12" width="6" height="11" fill="#94a3b8" stroke="#64748b"/>
+                    <rect x="62" y="12" width="6" height="11" fill="#94a3b8" stroke="#64748b"/>
+                    <circle cx="8" cy="17" r="3" fill="#64748b"/>
+                    <circle cx="62" cy="17" r="3" fill="#64748b"/>
+                    <text x="35" y="20" font-family="Arial" font-size="7" fill="#475569" text-anchor="middle">LUVA DN100</text>
+                </svg>`
+            },
+
+            // CAIXA D'ÁGUA - Acessórios
+            {
+                id: 'torneira-boia-12',
+                nome: 'Torneira Boia 1/2" Haste Metal',
+                categoria: 'caixa-dagua',
+                preco: 35.80,
+                codigo: '100002305',
+                especificacao: '1/2" Metal',
+                aplicacao: 'Caixa d\'água',
+                cor: 'caixa-dagua',
+                largura: 80,
+                altura: 40,
+                svg: `<svg viewBox="0 0 80 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="boiaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#059669;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#047857;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect x="5" y="15" width="30" height="10" fill="url(#boiaGrad)" stroke="#047857" stroke-width="1" rx="5"/>
+                    <line x1="35" y1="20" x2="55" y2="15" stroke="#6b7280" stroke-width="3"/>
+                    <circle cx="60" cy="12" r="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1"/>
+                    <rect x="68" y="8" width="8" height="8" fill="url(#boiaGrad)" stroke="#047857"/>
+                    <text x="40" y="35" font-family="Arial" font-size="6" fill="#047857" text-anchor="middle">BOIA 1/2"</text>
+                </svg>`
+            },
+            {
+                id: 'torneira-boia-34',
+                nome: 'Torneira Boia 3/4" Haste Metal',
+                categoria: 'caixa-dagua',
+                preco: 42.50,
+                codigo: '100002306',
+                especificacao: '3/4" Metal',
+                aplicacao: 'Caixa d\'água',
+                cor: 'caixa-dagua',
+                largura: 85,
+                altura: 45,
+                svg: `<svg viewBox="0 0 85 45" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="5" y="17" width="35" height="12" fill="#10b981" stroke="#047857" stroke-width="1" rx="6"/>
+                    <line x1="40" y1="23" x2="60" y2="17" stroke="#6b7280" stroke-width="4"/>
+                    <circle cx="65" cy="14" r="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1"/>
+                    <rect x="73" y="9" width="10" height="10" fill="#10b981" stroke="#047857"/>
+                    <text x="42" y="40" font-family="Arial" font-size="7" fill="#047857" text-anchor="middle">BOIA 3/4"</text>
+                </svg>`
+            }
+        ];
+
+        // Estado da aplicação
+        let appData = {
+            pecasCanvas: [],
+            proximoId: 1,
+            pecaSelecionada: null,
+            isDragging: false,
+            dragOffset: { x: 0, y: 0 },
+            categoriaAtiva: 'todas',
+            ferramentaAtiva: 'select'
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarPecasDisponiveis();
+            setupCanvasEvents();
+            setupFiltros();
+            atualizarListaMateriais();
+        });
+
+        // Configurar filtros de categoria
+        function setupFiltros() {
+            const filtros = document.querySelectorAll('.filter-btn');
+            filtros.forEach(filtro => {
+                filtro.addEventListener('click', function() {
+                    // Remover classe active de todos
+                    filtros.forEach(f => f.classList.remove('active'));
+                    // Adicionar classe active ao clicado
+                    this.classList.add('active');
+                    
+                    appData.categoriaAtiva = this.dataset.categoria;
+                    carregarPecasDisponiveis();
+                });
+            });
+        }
+
+        // Configurar ferramenta ativa
+        function setTool(tool) {
+            appData.ferramentaAtiva = tool;
+            
+            // Atualizar visual dos botões
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            event.currentTarget.classList.add('active');
+        }
+
+        // Carregar peças disponíveis na sidebar
+        function carregarPecasDisponiveis() {
+            const container = document.getElementById('pecas-disponiveis');
+            container.innerHTML = '';
+
+            const pecasFiltradas = appData.categoriaAtiva === 'todas' 
+                ? pecasDisponiveis 
+                : pecasDisponiveis.filter(peca => peca.categoria === appData.categoriaAtiva);
+
+            pecasFiltradas.forEach(peca => {
+                const pecaElement = document.createElement('div');
+                pecaElement.className = `peca-item peca-${peca.categoria}`;
+                pecaElement.draggable = true;
+                pecaElement.dataset.pecaId = peca.id;
+
+                pecaElement.innerHTML = `
+                    <div class="peca-svg">${peca.svg}</div>
+                    <div class="peca-info">
+                        <div class="peca-nome">${peca.nome}</div>
+                        <div class="peca-detalhes">${peca.especificacao} • ${peca.aplicacao}</div>
+                        <div class="peca-codigo">${peca.codigo}</div>
+                        <div class="peca-preco">R$ ${peca.preco.toFixed(2)}</div>
+                    </div>
+                `;
+
+                // Eventos de drag
+                pecaElement.addEventListener('dragstart', handleDragStart);
+                pecaElement.addEventListener('click', adicionarPecaAoCanvas);
+
+                container.appendChild(pecaElement);
+            });
+        }
+
+        // Adicionar peça ao canvas
+        function adicionarPecaAoCanvas(event) {
+            const pecaId = event.currentTarget.dataset.pecaId;
+            const pecaTemplate = pecasDisponiveis.find(p => p.id === pecaId);
+            
+            if (!pecaTemplate) return;
+
+            const novaPeca = {
+                id: appData.proximoId++,
+                tipo: pecaId,
+                nome: pecaTemplate.nome,
+                codigo: pecaTemplate.codigo,
+                preco: pecaTemplate.preco,
+                especificacao: pecaTemplate.especificacao,
+                x: Math.random() * 300 + 50,
+                y: Math.random() * 200 + 50,
+                largura: pecaTemplate.largura,
+                altura: pecaTemplate.altura,
+                svg: pecaTemplate.svg,
+                rotacao: 0
+            };
+
+            appData.pecasCanvas.push(novaPeca);
+            renderizarCanvas();
+            atualizarListaMateriais();
+        }
+
+        // Renderizar canvas
+        function renderizarCanvas() {
+            const canvas = document.getElementById('canvas-area');
+            
+            // Limpar peças existentes
+            const pecasExistentes = canvas.querySelectorAll('.canvas-peca');
+            pecasExistentes.forEach(peca => peca.remove());
+
+            // Adicionar peças
+            appData.pecasCanvas.forEach(peca => {
+                const pecaElement = document.createElement('div');
+                pecaElement.className = 'canvas-peca';
+                pecaElement.dataset.pecaId = peca.id;
+                pecaElement.style.left = peca.x + 'px';
+                pecaElement.style.top = peca.y + 'px';
+                pecaElement.style.width = peca.largura + 'px';
+                pecaElement.style.height = peca.altura + 'px';
+                pecaElement.style.transform = `rotate(${peca.rotacao}deg)`;
+                pecaElement.innerHTML = peca.svg;
+
+                // Eventos de mouse
+                pecaElement.addEventListener('mousedown', iniciarArrastar);
+                pecaElement.addEventListener('click', selecionarPeca);
+                pecaElement.addEventListener('dblclick', rotacionarPeca);
+
+                canvas.appendChild(pecaElement);
+            });
+        }
+
+        // Configurar eventos do canvas
+        function setupCanvasEvents() {
+            const canvas = document.getElementById('canvas-area');
+            
+            canvas.addEventListener('dragover', handleDragOver);
+            canvas.addEventListener('drop', handleDrop);
+            canvas.addEventListener('click', desselecionarPeca);
+            canvas.addEventListener('mousemove', arrastar);
+            canvas.addEventListener('mouseup', pararArrastar);
+        }
+
+        // Eventos de drag and drop
+        function handleDragStart(event) {
+            event.dataTransfer.setData('text/plain', event.currentTarget.dataset.pecaId);
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const pecaId = event.dataTransfer.getData('text/plain');
+            const pecaTemplate = pecasDisponiveis.find(p => p.id === pecaId);
+            
+            if (!pecaTemplate) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            const novaPeca = {
+                id: appData.proximoId++,
+                tipo: pecaId,
+                nome: pecaTemplate.nome,
+                codigo: pecaTemplate.codigo,
+                preco: pecaTemplate.preco,
+                especificacao: pecaTemplate.especificacao,
+                x: x - pecaTemplate.largura / 2,
+                y: y - pecaTemplate.altura / 2,
+                largura: pecaTemplate.largura,
+                altura: pecaTemplate.altura,
+                svg: pecaTemplate.svg,
+                rotacao: 0
+            };
+
+            appData.pecasCanvas.push(novaPeca);
+            renderizarCanvas();
+            atualizarListaMateriais();
+        }
+
+        // Arrastar peças no canvas
+        function iniciarArrastar(event) {
+            if (appData.ferramentaAtiva !== 'move' && appData.ferramentaAtiva !== 'select') return;
+            
+            event.stopPropagation();
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            const peca = appData.pecasCanvas.find(p => p.id === pecaId);
+            
+            if (!peca) return;
+
+            appData.isDragging = true;
+            appData.pecaSelecionada = peca;
+            
+            const rect = event.currentTarget.getBoundingClientRect();
+            appData.dragOffset = {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+
+            event.currentTarget.classList.add('dragging');
+            selecionarPeca(event);
+        }
+
+        function arrastar(event) {
+            if (!appData.isDragging || !appData.pecaSelecionada) return;
+
+            const canvas = document.getElementById('canvas-area');
+            const rect = canvas.getBoundingClientRect();
+            
+            const novoX = event.clientX - rect.left - appData.dragOffset.x;
+            const novoY = event.clientY - rect.top - appData.dragOffset.y;
+
+            // Permitir movimento livre em todo o canvas
+            appData.pecaSelecionada.x = Math.max(-20, Math.min(novoX, canvas.scrollWidth - appData.pecaSelecionada.largura + 20));
+            appData.pecaSelecionada.y = Math.max(-20, Math.min(novoY, canvas.scrollHeight - appData.pecaSelecionada.altura + 20));
+
+            renderizarCanvas();
+        }
+
+        function pararArrastar() {
+            if (appData.isDragging) {
+                document.querySelectorAll('.canvas-peca').forEach(el => {
+                    el.classList.remove('dragging');
+                });
+            }
+            appData.isDragging = false;
+        }
+
+        // Seleção de peças
+        function selecionarPeca(event) {
+            event.stopPropagation();
+            
+            // Remover seleção anterior
+            document.querySelectorAll('.canvas-peca').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Selecionar nova peça
+            event.currentTarget.classList.add('selected');
+            
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            appData.pecaSelecionada = appData.pecasCanvas.find(p => p.id === pecaId);
+        }
+
+        function desselecionarPeca(event) {
+            if (event.target.classList.contains('canvas-area')) {
+                document.querySelectorAll('.canvas-peca').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                appData.pecaSelecionada = null;
+            }
+        }
+
+        // Rotacionar peça
+        function rotacionarPeca(event) {
+            if (appData.ferramentaAtiva !== 'rotate' && appData.ferramentaAtiva !== 'select') return;
+            
+            event.stopPropagation();
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            const peca = appData.pecasCanvas.find(p => p.id === pecaId);
+            
+            if (peca) {
+                peca.rotacao = (peca.rotacao + 90) % 360;
+                renderizarCanvas();
+            }
+        }
+
+        // Excluir peça selecionada
+        function excluirSelecionada() {
+            if (!appData.pecaSelecionada) {
+                mostrarModal('⚠️ Atenção', 'Selecione uma peça para excluir.');
+                return;
+            }
+
+            const index = appData.pecasCanvas.findIndex(p => p.id === appData.pecaSelecionada.id);
+            if (index !== -1) {
+                appData.pecasCanvas.splice(index, 1);
+                appData.pecaSelecionada = null;
+                renderizarCanvas();
+                atualizarListaMateriais();
+            }
+        }
+
+        // Atualizar lista de materiais
+        function atualizarListaMateriais() {
+            const container = document.getElementById('lista-materiais');
+            const totalElement = document.getElementById('total-custo');
+
+            if (appData.pecasCanvas.length === 0) {
+                container.innerHTML = `
+                    <div class="material-item">
+                        <div class="material-info">
+                            <div class="material-nome">Nenhuma peça adicionada</div>
+                        </div>
+                    </div>
+                `;
+                totalElement.textContent = '💰 Total: R$ 0,00';
+                return;
+            }
+
+            // Agrupar peças por tipo
+            const materiais = {};
+            let total = 0;
+
+            appData.pecasCanvas.forEach(peca => {
+                if (!materiais[peca.tipo]) {
+                    materiais[peca.tipo] = {
+                        nome: peca.nome,
+                        codigo: peca.codigo,
+                        preco: peca.preco,
+                        quantidade: 0
+                    };
+                }
+                materiais[peca.tipo].quantidade++;
+                total += peca.preco;
+            });
+
+            // Renderizar lista
+            container.innerHTML = '';
+            Object.values(materiais).forEach(material => {
+                const item = document.createElement('div');
+                item.className = 'material-item';
+                item.innerHTML = `
+                    <div class="material-info">
+                        <div class="material-nome">${material.nome}</div>
+                        <div class="material-codigo">${material.codigo}</div>
+                    </div>
+                    <span class="material-qtd">${material.quantidade}</span>
+                `;
+                container.appendChild(item);
+            });
+
+            totalElement.textContent = `💰 Total: R$ ${total.toFixed(2)}`;
+        }
+
+        // Sistema de modal
+        function mostrarModal(titulo, conteudo) {
+            document.getElementById('modal-header').innerHTML = titulo;
+            document.getElementById('modal-body').innerHTML = conteudo;
+            document.getElementById('modal-overlay').classList.add('show');
+        }
+
+        function fecharModal() {
+            document.getElementById('modal-overlay').classList.remove('show');
+        }
+
+        // Funções dos botões
+        function novaObra() {
+            if (appData.pecasCanvas.length > 0) {
+                if (confirm('Deseja criar uma nova obra? Todos os dados atuais serão perdidos.')) {
+                    appData.pecasCanvas = [];
+                    appData.proximoId = 1;
+                    appData.pecaSelecionada = null;
+                    renderizarCanvas();
+                    atualizarListaMateriais();
+                }
+            } else {
+                mostrarModal('📋 Nova Obra', 'Área de trabalho limpa e pronta para um novo projeto!');
+            }
+        }
+
+        function importarDWG() {
+            mostrarModal('📁 Importar DWG', 
+                'Funcionalidade de importação DWG em desenvolvimento.<br><br>' +
+                'Em breve você poderá importar arquivos DWG diretamente do catálogo Tigre BIM ' +
+                'e o sistema identificará automaticamente todos os blocos disponíveis para seleção.'
+            );
+        }
+
+        function calcularMateriais() {
+            if (appData.pecasCanvas.length === 0) {
+                mostrarModal('⚠️ Atenção', 'Adicione algumas peças ao projeto antes de calcular.');
+                return;
+            }
+
+            const total = appData.pecasCanvas.reduce((sum, peca) => sum + peca.preco, 0);
+            const quantidade = appData.pecasCanvas.length;
+            const categorias = [...new Set(appData.pecasCanvas.map(p => {
+                const template = pecasDisponiveis.find(pt => pt.id === p.tipo);
+                return template ? template.categoria : 'desconhecida';
+            }))];
+            
+            const categoriasTexto = categorias.map(cat => {
+                switch(cat) {
+                    case 'esgoto': return 'Esgoto Redux';
+                    case 'caixa-dagua': return 'Caixa D\'Água';
+                    case 'irrigacao': return 'Irrigação';
+                    case 'soldavel': return 'Soldável';
+                    default: return cat;
+                }
+            }).join(', ');
+
+            mostrarModal('📊 Resumo do Projeto Tigre BIM', 
+                `<strong>🔧 Quantidade de peças:</strong> ${quantidade}<br>` +
+                `<strong>📦 Categorias:</strong> ${categoriasTexto}<br>` +
+                `<strong>💰 Custo total:</strong> R$ ${total.toFixed(2)}<br><br>` +
+                `<em>✅ Todas as peças são do catálogo oficial Tigre BIM</em>`
+            );
+        }
+
+        function exportarPDF() {
+            mostrarModal('📄 Exportar PDF', 
+                'Funcionalidade de exportação PDF em desenvolvimento.<br><br>' +
+                'Em breve você poderá exportar relatórios detalhados com:<br>' +
+                '• Lista completa de materiais<br>' +
+                '• Especificações técnicas das peças Tigre BIM<br>' +
+                '• Layout do projeto<br>' +
+                '• Orçamento detalhado'
+            );
+        }
+
+        // Atalhos de teclado
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Delete' && appData.pecaSelecionada) {
+                excluirSelecionada();
+            }
+            if (event.key === 'Escape') {
+                fecharModal();
+                desselecionarPeca({ target: { classList: { contains: () => true } } });
+            }
+        });
+
+        // Fechar modal clicando fora
+        document.getElementById('modal-overlay').addEventListener('click', function(event) {
+            if (event.target === this) {
+                fecharModal();
+            }
+        });
+    </script>
+</body>
+</html>

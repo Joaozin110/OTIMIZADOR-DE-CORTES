@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otimizador de Cortes Hidráulicos - Tigre</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-tigre {
+            background: white;
+            color: #1e40af;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 800;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 120px);
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+
+        .sidebar-section {
+            padding: 1.5rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-section h3 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-icon {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+
+        .pecas-grid {
+            display: grid;
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .pecas-grid::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .pecas-grid::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+
+        .pecas-grid::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        .peca-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: grab;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .peca-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--peca-color, #3b82f6);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .peca-item:hover {
+            background: white;
+            border-color: var(--peca-color, #3b82f6);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .peca-item:hover::before {
+            opacity: 1;
+        }
+
+        .peca-item:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+
+        .peca-svg {
+            width: 50px;
+            height: 50px;
+            margin-right: 1rem;
+            flex-shrink: 0;
+            background: white;
+            border-radius: 8px;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .peca-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .peca-nome {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #0f172a;
+            margin-bottom: 0.25rem;
+        }
+
+        .peca-detalhes {
+            font-size: 0.75rem;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .peca-preco {
+            font-weight: 600;
+            color: #059669;
+        }
+
+        .canvas-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+
+        .canvas-header {
+            background: #f8fafc;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .canvas-title {
+            font-weight: 600;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .canvas-tools {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tool-btn {
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #64748b;
+        }
+
+        .tool-btn:hover {
+            background: #f1f5f9;
+            color: #3b82f6;
+        }
+
+        .canvas-area {
+            width: 100%;
+            height: calc(100% - 70px);
+            background: 
+                radial-gradient(circle at 1px 1px, #e2e8f0 1px, transparent 0);
+            background-size: 20px 20px;
+            position: relative;
+            overflow: auto;
+        }
+
+        .canvas-peca {
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            border-radius: 8px;
+            padding: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+        }
+
+        .canvas-peca:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .canvas-peca.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .lista-materiais {
+            background: #f8fafc;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .material-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            font-size: 0.875rem;
+        }
+
+        .material-nome {
+            font-weight: 500;
+            color: #0f172a;
+        }
+
+        .material-qtd {
+            background: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .total-custo {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-radius: 10px;
+            font-weight: 700;
+            color: #1e40af;
+            text-align: center;
+            border: 1px solid #93c5fd;
+        }
+
+        /* Cores específicas das peças */
+        .peca-branco { --peca-color: #64748b; }
+        .peca-marrom { --peca-color: #92400e; }
+        .peca-azul { --peca-color: #0ea5e9; }
+        .peca-laranja { --peca-color: #ea580c; }
+
+        /* Responsividade */
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+                height: auto;
+                min-height: calc(100vh - 120px);
+            }
+            
+            .sidebar {
+                width: 100%;
+                order: 2;
+            }
+            
+            .canvas-container {
+                height: 400px;
+                order: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.25rem;
+            }
+            
+            .main-container {
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+            
+            .btn {
+                font-size: 0.75rem;
+                padding: 0.5rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>
+                <span class="logo-tigre">TIGRE</span>
+                Otimizador de Cortes Hidráulicos
+            </h1>
+            <div class="header-buttons">
+                <button class="btn btn-primary" onclick="novaObra()">
+                    📋 Nova Obra
+                </button>
+                <button class="btn btn-primary" onclick="importarDWG()">
+                    📁 Importar DWG
+                </button>
+                <button class="btn btn-success" onclick="calcularMateriais()">
+                    🧮 Calcular
+                </button>
+                <button class="btn btn-primary" onclick="exportarPDF()">
+                    📄 Exportar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>
+                    <span class="section-icon">🔧</span>
+                    Catálogo de Peças
+                </h3>
+                <div id="pecas-disponiveis" class="pecas-grid">
+                    <!-- Peças serão carregadas aqui -->
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>
+                    <span class="section-icon">📊</span>
+                    Lista de Materiais
+                </h3>
+                <div id="lista-materiais" class="lista-materiais">
+                    <div class="material-item">
+                        <span class="material-nome">Nenhuma peça adicionada</span>
+                    </div>
+                </div>
+                <div class="total-custo" id="total-custo">
+                    💰 Total: R$ 0,00
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-header">
+                <div class="canvas-title">
+                    🎯 Área de Projeto
+                </div>
+                <div class="canvas-tools">
+                    <button class="tool-btn" title="Selecionar">↖️</button>
+                    <button class="tool-btn" title="Mover">✋</button>
+                    <button class="tool-btn" title="Rotacionar">🔄</button>
+                    <button class="tool-btn" title="Excluir">🗑️</button>
+                </div>
+            </div>
+            <div class="canvas-area" id="canvas-area">
+                <!-- Peças do projeto serão adicionadas aqui -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Catálogo completo de peças Tigre com cores e formatos fiéis
+        const pecasDisponiveis = [
+            // TUBOS BRANCOS - ESGOTO
+            {
+                id: 'tubo-branco-100',
+                nome: 'Tubo Branco 100mm',
+                categoria: 'Tubos Esgoto',
+                preco: 25.00,
+                codigo: 'TG-TB-100',
+                cor: 'branco',
+                largura: 120,
+                altura: 25,
+                svg: `<svg viewBox="0 0 120 25" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="tuboBrancoGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#f8f9fa;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#e9ecef;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect x="2" y="3" width="116" height="19" fill="url(#tuboBrancoGrad)" 
+                          stroke="#dee2e6" stroke-width="1" rx="3"/>
+                    <rect x="0" y="5" width="4" height="15" fill="#e9ecef" stroke="#dee2e6"/>
+                    <rect x="116" y="5" width="4" height="15" fill="#e9ecef" stroke="#dee2e6"/>
+                    <line x1="10" y1="5" x2="10" y2="20" stroke="#dee2e6" stroke-width="1"/>
+                    <line x1="110" y1="5" x2="110" y2="20" stroke="#dee2e6" stroke-width="1"/>
+                    <text x="60" y="14" font-family="Arial" font-size="7" fill="#6c757d" text-anchor="middle">TIGRE 100mm</text>
+                </svg>`
+            },
+            {
+                id: 'tubo-branco-75',
+                nome: 'Tubo Branco 75mm',
+                categoria: 'Tubos Esgoto',
+                preco: 18.50,
+                codigo: 'TG-TB-75',
+                cor: 'branco',
+                largura: 100,
+                altura: 20,
+                svg: `<svg viewBox="0 0 100 20" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="2" width="96" height="16" fill="#ffffff" 
+                          stroke="#dee2e6" stroke-width="1" rx="2"/>
+                    <rect x="0" y="4" width="4" height="12" fill="#e9ecef" stroke="#dee2e6"/>
+                    <rect x="96" y="4" width="4" height="12" fill="#e9ecef" stroke="#dee2e6"/>
+                    <text x="50" y="12" font-family="Arial" font-size="6" fill="#6c757d" text-anchor="middle">75mm</text>
+                </svg>`
+            },
+            {
+                id: 'tubo-branco-50',
+                nome: 'Tubo Branco 50mm',
+                categoria: 'Tubos Esgoto',
+                preco: 12.30,
+                codigo: 'TG-TB-50',
+                cor: 'branco',
+                largura: 80,
+                altura: 15,
+                svg: `<svg viewBox="0 0 80 15" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="2" width="76" height="11" fill="#ffffff" 
+                          stroke="#dee2e6" stroke-width="1" rx="2"/>
+                    <rect x="0" y="3" width="4" height="9" fill="#e9ecef" stroke="#dee2e6"/>
+                    <rect x="76" y="3" width="4" height="9" fill="#e9ecef" stroke="#dee2e6"/>
+                    <text x="40" y="9" font-family="Arial" font-size="5" fill="#6c757d" text-anchor="middle">50mm</text>
+                </svg>`
+            },
+
+            // TUBOS AZUIS - IRRIGAÇÃO
+            {
+                id: 'tubo-azul-100',
+                nome: 'Tubo Azul 100mm',
+                categoria: 'Tubos Irrigação',
+                preco: 28.00,
+                codigo: 'TG-TA-100',
+                cor: 'azul',
+                largura: 120,
+                altura: 25,
+                svg: `<svg viewBox="0 0 120 25" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="tuboAzulGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect x="2" y="3" width="116" height="19" fill="url(#tuboAzulGrad)" 
+                          stroke="#1e40af" stroke-width="1" rx="3"/>
+                    <rect x="0" y="5" width="4" height="15" fill="#1e40af" stroke="#1d4ed8"/>
+                    <rect x="116" y="5" width="4" height="15" fill="#1e40af" stroke="#1d4ed8"/>
+                    <line x1="10" y1="5" x2="10" y2="20" stroke="#1e40af" stroke-width="1"/>
+                    <line x1="110" y1="5" x2="110" y2="20" stroke="#1e40af" stroke-width="1"/>
+                    <text x="60" y="14" font-family="Arial" font-size="7" fill="white" text-anchor="middle">TIGRE 100mm</text>
+                </svg>`
+            },
+
+            // CONEXÕES BRANCAS - ESGOTO
+            {
+                id: 'joelho-90-branco-100',
+                nome: 'Joelho 90° Branco 100mm',
+                categoria: 'Conexões Esgoto',
+                preco: 15.50,
+                codigo: 'TG-J90B-100',
+                cor: 'branco',
+                largura: 80,
+                altura: 80,
+                svg: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="joelhoBrancoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#f8f9fa;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#e9ecef;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 15 15 Q 15 15 15 40 Q 15 65 40 65 Q 65 65 65 65" 
+                          fill="url(#joelhoBrancoGrad)" stroke="#dee2e6" stroke-width="2"/>
+                    <rect x="10" y="35" width="10" height="10" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <rect x="60" y="60" width="10" height="10" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <circle cx="15" cy="40" r="4" fill="none" stroke="#dee2e6" stroke-width="1"/>
+                    <circle cx="65" cy="65" r="4" fill="none" stroke="#dee2e6" stroke-width="1"/>
+                    <text x="35" y="35" font-family="Arial" font-size="8" fill="#6c757d" text-anchor="middle">90°</text>
+                </svg>`
+            },
+            {
+                id: 'te-branco-100',
+                nome: 'Tê Branco 100mm',
+                categoria: 'Conexões Esgoto',
+                preco: 22.75,
+                codigo: 'TG-TEB-100',
+                cor: 'branco',
+                largura: 80,
+                altura: 80,
+                svg: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="35" width="60" height="10" fill="#ffffff" stroke="#dee2e6" stroke-width="1"/>
+                    <rect x="35" y="10" width="10" height="60" fill="#ffffff" stroke="#dee2e6" stroke-width="1"/>
+                    <rect x="8" y="33" width="4" height="14" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <rect x="68" y="33" width="4" height="14" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <rect x="33" y="8" width="14" height="4" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <circle cx="12" cy="40" r="2" fill="#dee2e6"/>
+                    <circle cx="68" cy="40" r="2" fill="#dee2e6"/>
+                    <circle cx="40" cy="12" r="2" fill="#dee2e6"/>
+                    <text x="40" y="45" font-family="Arial" font-size="6" fill="#6c757d" text-anchor="middle">Tê</text>
+                </svg>`
+            },
+            {
+                id: 'cap-branco-100',
+                nome: 'Cap Branco 100mm',
+                categoria: 'Conexões Esgoto',
+                preco: 8.90,
+                codigo: 'TG-CAPB-100',
+                cor: 'branco',
+                largura: 40,
+                altura: 40,
+                svg: `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="capBrancoGrad" cx="50%" cy="30%" r="70%">
+                            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+                            <stop offset="70%" style="stop-color:#f8f9fa;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#e9ecef;stop-opacity:1" />
+                        </radialGradient>
+                    </defs>
+                    <circle cx="20" cy="20" r="16" fill="url(#capBrancoGrad)" stroke="#dee2e6" stroke-width="1"/>
+                    <rect x="16" y="32" width="8" height="6" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <circle cx="20" cy="20" r="12" fill="none" stroke="#dee2e6" stroke-width="1"/>
+                    <circle cx="20" cy="20" r="2" fill="#dee2e6"/>
+                    <text x="20" y="23" font-family="Arial" font-size="5" fill="#6c757d" text-anchor="middle">CAP</text>
+                </svg>`
+            },
+
+            // CONEXÕES MARRONS - SOLDÁVEIS
+            {
+                id: 'joelho-90-marrom-100',
+                nome: 'Joelho 90° Marrom 100mm',
+                categoria: 'Conexões Soldáveis',
+                preco: 18.50,
+                codigo: 'TG-J90M-100',
+                cor: 'marrom',
+                largura: 80,
+                altura: 80,
+                svg: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="joelhoMarromGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#92400e;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#a16207;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#78350f;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 15 15 Q 15 15 15 40 Q 15 65 40 65 Q 65 65 65 65" 
+                          fill="url(#joelhoMarromGrad)" stroke="#78350f" stroke-width="2"/>
+                    <rect x="10" y="35" width="10" height="10" fill="#92400e" stroke="#78350f"/>
+                    <rect x="60" y="60" width="10" height="10" fill="#92400e" stroke="#78350f"/>
+                    <circle cx="15" cy="40" r="4" fill="none" stroke="#78350f" stroke-width="1"/>
+                    <circle cx="65" cy="65" r="4" fill="none" stroke="#78350f" stroke-width="1"/>
+                    <text x="35" y="35" font-family="Arial" font-size="8" fill="white" text-anchor="middle">90°</text>
+                </svg>`
+            },
+            {
+                id: 'joelho-45-marrom-100',
+                nome: 'Joelho 45° Marrom 100mm',
+                categoria: 'Conexões Soldáveis',
+                preco: 16.20,
+                codigo: 'TG-J45M-100',
+                cor: 'marrom',
+                largura: 70,
+                altura: 50,
+                svg: `<svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 10 40 Q 25 25 60 30" fill="none" stroke="#92400e" stroke-width="10" stroke-linecap="round"/>
+                    <rect x="5" y="35" width="10" height="10" fill="#92400e" stroke="#78350f"/>
+                    <rect x="55" y="25" width="10" height="10" fill="#92400e" stroke="#78350f"/>
+                    <circle cx="10" cy="40" r="3" fill="none" stroke="#78350f" stroke-width="1"/>
+                    <circle cx="60" cy="30" r="3" fill="none" stroke="#78350f" stroke-width="1"/>
+                    <text x="35" y="25" font-family="Arial" font-size="6" fill="white" text-anchor="middle">45°</text>
+                </svg>`
+            },
+
+            // CONEXÕES LARANJAS - SOLDÁVEIS
+            {
+                id: 'te-laranja-100',
+                nome: 'Tê Laranja 100mm',
+                categoria: 'Conexões Soldáveis',
+                preco: 24.80,
+                codigo: 'TG-TEL-100',
+                cor: 'laranja',
+                largura: 80,
+                altura: 80,
+                svg: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="teLaranjaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ea580c;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#f97316;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#c2410c;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect x="10" y="35" width="60" height="10" fill="url(#teLaranjaGrad)" stroke="#c2410c" stroke-width="1"/>
+                    <rect x="35" y="10" width="10" height="60" fill="url(#teLaranjaGrad)" stroke="#c2410c" stroke-width="1"/>
+                    <rect x="8" y="33" width="4" height="14" fill="#ea580c" stroke="#c2410c"/>
+                    <rect x="68" y="33" width="4" height="14" fill="#ea580c" stroke="#c2410c"/>
+                    <rect x="33" y="8" width="14" height="4" fill="#ea580c" stroke="#c2410c"/>
+                    <circle cx="12" cy="40" r="2" fill="#c2410c"/>
+                    <circle cx="68" cy="40" r="2" fill="#c2410c"/>
+                    <circle cx="40" cy="12" r="2" fill="#c2410c"/>
+                    <text x="40" y="45" font-family="Arial" font-size="6" fill="white" text-anchor="middle">Tê</text>
+                </svg>`
+            },
+            {
+                id: 'reducao-laranja-100-75',
+                nome: 'Redução Laranja 100x75mm',
+                categoria: 'Conexões Soldáveis',
+                preco: 19.30,
+                codigo: 'TG-REDL-100-75',
+                cor: 'laranja',
+                largura: 60,
+                altura: 40,
+                svg: `<svg viewBox="0 0 60 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="reducaoLaranjaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#ea580c;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#f97316;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#c2410c;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 5 5 L 50 12 L 50 28 L 5 35 Z" fill="url(#reducaoLaranjaGrad)" stroke="#c2410c" stroke-width="1"/>
+                    <rect x="2" y="8" width="6" height="24" fill="#ea580c" stroke="#c2410c"/>
+                    <rect x="47" y="15" width="6" height="10" fill="#ea580c" stroke="#c2410c"/>
+                    <text x="15" y="22" font-family="Arial" font-size="5" fill="white">100</text>
+                    <text x="35" y="22" font-family="Arial" font-size="5" fill="white">75</text>
+                </svg>`
+            },
+
+            // CONEXÕES AZUIS - IRRIGAÇÃO
+            {
+                id: 'joelho-90-azul-100',
+                nome: 'Joelho 90° Azul 100mm',
+                categoria: 'Conexões Irrigação',
+                preco: 19.80,
+                codigo: 'TG-J90A-100',
+                cor: 'azul',
+                largura: 80,
+                altura: 80,
+                svg: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="joelhoAzulGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 15 15 Q 15 15 15 40 Q 15 65 40 65 Q 65 65 65 65" 
+                          fill="url(#joelhoAzulGrad)" stroke="#1d4ed8" stroke-width="2"/>
+                    <rect x="10" y="35" width="10" height="10" fill="#3b82f6" stroke="#1d4ed8"/>
+                    <rect x="60" y="60" width="10" height="10" fill="#3b82f6" stroke="#1d4ed8"/>
+                    <circle cx="15" cy="40" r="4" fill="none" stroke="#1d4ed8" stroke-width="1"/>
+                    <circle cx="65" cy="65" r="4" fill="none" stroke="#1d4ed8" stroke-width="1"/>
+                    <text x="35" y="35" font-family="Arial" font-size="8" fill="white" text-anchor="middle">90°</text>
+                </svg>`
+            },
+            {
+                id: 'te-azul-100',
+                nome: 'Tê Azul 100mm',
+                categoria: 'Conexões Irrigação',
+                preco: 26.50,
+                codigo: 'TG-TEA-100',
+                cor: 'azul',
+                largura: 80,
+                altura: 80,
+                svg: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="35" width="60" height="10" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1"/>
+                    <rect x="35" y="10" width="10" height="60" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1"/>
+                    <rect x="8" y="33" width="4" height="14" fill="#2563eb" stroke="#1d4ed8"/>
+                    <rect x="68" y="33" width="4" height="14" fill="#2563eb" stroke="#1d4ed8"/>
+                    <rect x="33" y="8" width="14" height="4" fill="#2563eb" stroke="#1d4ed8"/>
+                    <circle cx="12" cy="40" r="2" fill="#1d4ed8"/>
+                    <circle cx="68" cy="40" r="2" fill="#1d4ed8"/>
+                    <circle cx="40" cy="12" r="2" fill="#1d4ed8"/>
+                    <text x="40" y="45" font-family="Arial" font-size="6" fill="white" text-anchor="middle">Tê</text>
+                </svg>`
+            }
+        ];
+
+        // Estado da aplicação
+        let appData = {
+            pecasCanvas: [],
+            proximoId: 1,
+            pecaSelecionada: null,
+            isDragging: false,
+            dragOffset: { x: 0, y: 0 }
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarPecasDisponiveis();
+            setupCanvasEvents();
+            atualizarListaMateriais();
+        });
+
+        // Carregar peças disponíveis na sidebar
+        function carregarPecasDisponiveis() {
+            const container = document.getElementById('pecas-disponiveis');
+            container.innerHTML = '';
+
+            pecasDisponiveis.forEach(peca => {
+                const pecaElement = document.createElement('div');
+                pecaElement.className = `peca-item peca-${peca.cor}`;
+                pecaElement.draggable = true;
+                pecaElement.dataset.pecaId = peca.id;
+
+                pecaElement.innerHTML = `
+                    <div class="peca-svg">${peca.svg}</div>
+                    <div class="peca-info">
+                        <div class="peca-nome">${peca.nome}</div>
+                        <div class="peca-detalhes">
+                            <span>${peca.codigo}</span>
+                            <span class="peca-preco">R$ ${peca.preco.toFixed(2)}</span>
+                        </div>
+                    </div>
+                `;
+
+                // Eventos de drag
+                pecaElement.addEventListener('dragstart', handleDragStart);
+                pecaElement.addEventListener('click', adicionarPecaAoCanvas);
+
+                container.appendChild(pecaElement);
+            });
+        }
+
+        // Adicionar peça ao canvas
+        function adicionarPecaAoCanvas(event) {
+            const pecaId = event.currentTarget.dataset.pecaId;
+            const pecaTemplate = pecasDisponiveis.find(p => p.id === pecaId);
+            
+            if (!pecaTemplate) return;
+
+            const novaPeca = {
+                id: appData.proximoId++,
+                tipo: pecaId,
+                nome: pecaTemplate.nome,
+                preco: pecaTemplate.preco,
+                x: Math.random() * 300 + 50,
+                y: Math.random() * 200 + 50,
+                largura: pecaTemplate.largura,
+                altura: pecaTemplate.altura,
+                svg: pecaTemplate.svg,
+                rotacao: 0
+            };
+
+            appData.pecasCanvas.push(novaPeca);
+            renderizarCanvas();
+            atualizarListaMateriais();
+        }
+
+        // Renderizar canvas
+        function renderizarCanvas() {
+            const canvas = document.getElementById('canvas-area');
+            
+            // Limpar peças existentes
+            const pecasExistentes = canvas.querySelectorAll('.canvas-peca');
+            pecasExistentes.forEach(peca => peca.remove());
+
+            // Adicionar peças
+            appData.pecasCanvas.forEach(peca => {
+                const pecaElement = document.createElement('div');
+                pecaElement.className = 'canvas-peca';
+                pecaElement.dataset.pecaId = peca.id;
+                pecaElement.style.left = peca.x + 'px';
+                pecaElement.style.top = peca.y + 'px';
+                pecaElement.style.width = peca.largura + 'px';
+                pecaElement.style.height = peca.altura + 'px';
+                pecaElement.style.transform = `rotate(${peca.rotacao}deg)`;
+                pecaElement.innerHTML = peca.svg;
+
+                // Eventos de mouse
+                pecaElement.addEventListener('mousedown', iniciarArrastar);
+                pecaElement.addEventListener('click', selecionarPeca);
+                pecaElement.addEventListener('dblclick', rotacionarPeca);
+
+                canvas.appendChild(pecaElement);
+            });
+        }
+
+        // Configurar eventos do canvas
+        function setupCanvasEvents() {
+            const canvas = document.getElementById('canvas-area');
+            
+            canvas.addEventListener('dragover', handleDragOver);
+            canvas.addEventListener('drop', handleDrop);
+            canvas.addEventListener('click', desselecionarPeca);
+            canvas.addEventListener('mousemove', arrastar);
+            canvas.addEventListener('mouseup', pararArrastar);
+        }
+
+        // Eventos de drag and drop
+        function handleDragStart(event) {
+            event.dataTransfer.setData('text/plain', event.currentTarget.dataset.pecaId);
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const pecaId = event.dataTransfer.getData('text/plain');
+            const pecaTemplate = pecasDisponiveis.find(p => p.id === pecaId);
+            
+            if (!pecaTemplate) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            const novaPeca = {
+                id: appData.proximoId++,
+                tipo: pecaId,
+                nome: pecaTemplate.nome,
+                preco: pecaTemplate.preco,
+                x: x - pecaTemplate.largura / 2,
+                y: y - pecaTemplate.altura / 2,
+                largura: pecaTemplate.largura,
+                altura: pecaTemplate.altura,
+                svg: pecaTemplate.svg,
+                rotacao: 0
+            };
+
+            appData.pecasCanvas.push(novaPeca);
+            renderizarCanvas();
+            atualizarListaMateriais();
+        }
+
+        // Arrastar peças no canvas
+        function iniciarArrastar(event) {
+            event.stopPropagation();
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            const peca = appData.pecasCanvas.find(p => p.id === pecaId);
+            
+            if (!peca) return;
+
+            appData.isDragging = true;
+            appData.pecaSelecionada = peca;
+            
+            const rect = event.currentTarget.getBoundingClientRect();
+            appData.dragOffset = {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+
+            selecionarPeca(event);
+        }
+
+        function arrastar(event) {
+            if (!appData.isDragging || !appData.pecaSelecionada) return;
+
+            const canvas = document.getElementById('canvas-area');
+            const rect = canvas.getBoundingClientRect();
+            
+            const novoX = event.clientX - rect.left - appData.dragOffset.x;
+            const novoY = event.clientY - rect.top - appData.dragOffset.y;
+
+            // Permitir movimento livre em todo o canvas
+            appData.pecaSelecionada.x = Math.max(-20, Math.min(novoX, canvas.scrollWidth - appData.pecaSelecionada.largura + 20));
+            appData.pecaSelecionada.y = Math.max(-20, Math.min(novoY, canvas.scrollHeight - appData.pecaSelecionada.altura + 20));
+
+            renderizarCanvas();
+        }
+
+        function pararArrastar() {
+            appData.isDragging = false;
+        }
+
+        // Seleção de peças
+        function selecionarPeca(event) {
+            event.stopPropagation();
+            
+            // Remover seleção anterior
+            document.querySelectorAll('.canvas-peca').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Selecionar nova peça
+            event.currentTarget.classList.add('selected');
+            
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            appData.pecaSelecionada = appData.pecasCanvas.find(p => p.id === pecaId);
+        }
+
+        function desselecionarPeca(event) {
+            if (event.target.classList.contains('canvas-area')) {
+                document.querySelectorAll('.canvas-peca').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                appData.pecaSelecionada = null;
+            }
+        }
+
+        // Rotacionar peça
+        function rotacionarPeca(event) {
+            event.stopPropagation();
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            const peca = appData.pecasCanvas.find(p => p.id === pecaId);
+            
+            if (peca) {
+                peca.rotacao = (peca.rotacao + 90) % 360;
+                renderizarCanvas();
+            }
+        }
+
+        // Atualizar lista de materiais
+        function atualizarListaMateriais() {
+            const container = document.getElementById('lista-materiais');
+            const totalElement = document.getElementById('total-custo');
+
+            if (appData.pecasCanvas.length === 0) {
+                container.innerHTML = '<div class="material-item"><span class="material-nome">Nenhuma peça adicionada</span></div>';
+                totalElement.textContent = '💰 Total: R$ 0,00';
+                return;
+            }
+
+            // Agrupar peças por tipo
+            const materiais = {};
+            let total = 0;
+
+            appData.pecasCanvas.forEach(peca => {
+                if (!materiais[peca.tipo]) {
+                    materiais[peca.tipo] = {
+                        nome: peca.nome,
+                        preco: peca.preco,
+                        quantidade: 0
+                    };
+                }
+                materiais[peca.tipo].quantidade++;
+                total += peca.preco;
+            });
+
+            // Renderizar lista
+            container.innerHTML = '';
+            Object.values(materiais).forEach(material => {
+                const item = document.createElement('div');
+                item.className = 'material-item';
+                item.innerHTML = `
+                    <span class="material-nome">${material.nome}</span>
+                    <span class="material-qtd">${material.quantidade}</span>
+                `;
+                container.appendChild(item);
+            });
+
+            totalElement.textContent = `💰 Total: R$ ${total.toFixed(2)}`;
+        }
+
+        // Funções dos botões
+        function novaObra() {
+            if (confirm('Deseja criar uma nova obra? Todos os dados atuais serão perdidos.')) {
+                appData.pecasCanvas = [];
+                appData.proximoId = 1;
+                appData.pecaSelecionada = null;
+                renderizarCanvas();
+                atualizarListaMateriais();
+            }
+        }
+
+        function importarDWG() {
+            alert('Funcionalidade de importação DWG em desenvolvimento.');
+        }
+
+        function calcularMateriais() {
+            const total = appData.pecasCanvas.reduce((sum, peca) => sum + peca.preco, 0);
+            const quantidade = appData.pecasCanvas.length;
+            
+            alert(`📊 Resumo do Projeto:\n\n🔧 Quantidade de peças: ${quantidade}\n💰 Custo total: R$ ${total.toFixed(2)}`);
+        }
+
+        function exportarPDF() {
+            alert('Funcionalidade de exportação PDF em desenvolvimento.');
+        }
+
+        // Atalhos de teclado
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Delete' && appData.pecaSelecionada) {
+                const index = appData.pecasCanvas.findIndex(p => p.id === appData.pecaSelecionada.id);
+                if (index !== -1) {
+                    appData.pecasCanvas.splice(index, 1);
+                    appData.pecaSelecionada = null;
+                    renderizarCanvas();
+                    atualizarListaMateriais();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otimizador de Cortes Hidráulicos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background-color: #2563eb;
+            color: white;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+
+        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+
+        .btn-success {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #059669;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: white;
+            border-right: 1px solid #e5e7eb;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .sidebar-section h3 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: #374151;
+        }
+
+        .peca-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: grab;
+            transition: all 0.2s;
+        }
+
+        .peca-item:hover {
+            background-color: #f3f4f6;
+            border-color: #d1d5db;
+            transform: translateY(-1px);
+        }
+
+        .peca-item:active {
+            cursor: grabbing;
+        }
+
+        .peca-svg {
+            width: 40px;
+            height: 40px;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .peca-info {
+            flex: 1;
+        }
+
+        .peca-nome {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #111827;
+        }
+
+        .peca-preco {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        .canvas-container {
+            flex: 1;
+            background-color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .canvas-area {
+            width: 100%;
+            height: 100%;
+            background-color: #fafafa;
+            background-image: 
+                linear-gradient(#e5e7eb 1px, transparent 1px),
+                linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+            position: relative;
+        }
+
+        .canvas-peca {
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            transition: transform 0.1s ease;
+        }
+
+        .canvas-peca:hover {
+            transform: scale(1.05);
+        }
+
+        .canvas-peca.selected {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+
+        .lista-materiais {
+            background-color: #f8fafc;
+            padding: 1rem;
+        }
+
+        .material-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 0.5rem;
+            margin-bottom: 0.25rem;
+            background-color: white;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .material-nome {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .material-qtd {
+            color: #6b7280;
+            margin-left: 0.5rem;
+        }
+
+        .total-custo {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background-color: #dbeafe;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #1e40af;
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 200px;
+            }
+            
+            .header-buttons {
+                justify-content: center;
+            }
+            
+            .btn {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Otimizador de Cortes Hidráulicos</h1>
+        <div class="header-buttons">
+            <button class="btn btn-primary" onclick="novaObra()">Nova Obra</button>
+            <button class="btn btn-secondary" onclick="importarDWG()">Importar DWG</button>
+            <button class="btn btn-success" onclick="calcularMateriais()">Calcular</button>
+            <button class="btn btn-secondary" onclick="exportarPDF()">Exportar PDF</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>Peças Disponíveis</h3>
+                <div id="pecas-disponiveis">
+                    <!-- Peças serão carregadas aqui -->
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Lista de Materiais</h3>
+                <div id="lista-materiais">
+                    <div class="material-item">
+                        <span class="material-nome">Nenhuma peça adicionada</span>
+                    </div>
+                </div>
+                <div class="total-custo" id="total-custo">
+                    Total: R$ 0,00
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-area" id="canvas-area">
+                <!-- Peças do projeto serão adicionadas aqui -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dados das peças com SVGs realistas e proporcionais
+        const pecasDisponiveis = [
+            {
+                id: 'joelho-90-100',
+                nome: 'Joelho 90° 100mm',
+                preco: 12.50,
+                codigo: 'TG-J90-100',
+                largura: 100,
+                altura: 100,
+                svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="joelhoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#8B4513;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#A0522D;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#654321;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Corpo principal do joelho -->
+                    <path d="M 20 20 Q 20 20 20 50 Q 20 80 50 80 Q 80 80 80 80" 
+                          fill="url(#joelhoGrad)" stroke="#5D4037" stroke-width="2"/>
+                    <!-- Conexão de entrada -->
+                    <rect x="15" y="45" width="10" height="10" fill="#8B4513" stroke="#5D4037"/>
+                    <!-- Conexão de saída -->
+                    <rect x="75" y="75" width="10" height="10" fill="#8B4513" stroke="#5D4037"/>
+                    <!-- Detalhes de rosca -->
+                    <circle cx="20" cy="50" r="3" fill="none" stroke="#5D4037" stroke-width="1"/>
+                    <circle cx="80" cy="80" r="3" fill="none" stroke="#5D4037" stroke-width="1"/>
+                    <!-- Marca/texto -->
+                    <text x="45" y="45" font-family="Arial" font-size="8" fill="#FFF" text-anchor="middle">90°</text>
+                </svg>`
+            },
+            {
+                id: 'tubo-100',
+                nome: 'Tubo 100mm',
+                preco: 25.00,
+                codigo: 'TG-T-100',
+                largura: 120,
+                altura: 20,
+                svg: `<svg viewBox="0 0 120 20" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="tuboGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#F5F5F5;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#FFFFFF;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#E8E8E8;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Corpo do tubo -->
+                    <rect x="2" y="2" width="116" height="16" fill="url(#tuboGrad)" 
+                          stroke="#CCCCCC" stroke-width="1" rx="2"/>
+                    <!-- Conexões nas extremidades -->
+                    <rect x="0" y="4" width="4" height="12" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <rect x="116" y="4" width="4" height="12" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <!-- Anéis de vedação -->
+                    <line x1="8" y1="4" x2="8" y2="16" stroke="#CCCCCC" stroke-width="1"/>
+                    <line x1="112" y1="4" x2="112" y2="16" stroke="#CCCCCC" stroke-width="1"/>
+                    <!-- Marcação de diâmetro -->
+                    <text x="60" y="12" font-family="Arial" font-size="6" fill="#666" text-anchor="middle">100mm</text>
+                </svg>`
+            },
+            {
+                id: 'te-100',
+                nome: 'Tê 100mm',
+                preco: 18.75,
+                codigo: 'TG-TE-100',
+                largura: 100,
+                altura: 100,
+                svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="teGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#F8F8F8;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#FFFFFF;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#F0F0F0;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Corpo horizontal -->
+                    <rect x="10" y="45" width="80" height="10" fill="url(#teGrad)" stroke="#CCCCCC" stroke-width="1"/>
+                    <!-- Corpo vertical -->
+                    <rect x="45" y="10" width="10" height="80" fill="url(#teGrad)" stroke="#CCCCCC" stroke-width="1"/>
+                    <!-- Conexões -->
+                    <rect x="8" y="43" width="4" height="14" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <rect x="88" y="43" width="4" height="14" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <rect x="43" y="8" width="14" height="4" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <!-- Pontos de conexão -->
+                    <circle cx="12" cy="50" r="2" fill="#CCCCCC"/>
+                    <circle cx="88" cy="50" r="2" fill="#CCCCCC"/>
+                    <circle cx="50" cy="12" r="2" fill="#CCCCCC"/>
+                    <!-- Marcação -->
+                    <text x="50" y="55" font-family="Arial" font-size="6" fill="#666" text-anchor="middle">Tê</text>
+                </svg>`
+            },
+            {
+                id: 'cap-100',
+                nome: 'Cap 100mm',
+                preco: 8.90,
+                codigo: 'TG-CAP-100',
+                largura: 40,
+                altura: 40,
+                svg: `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="capGrad" cx="50%" cy="30%" r="70%">
+                            <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+                            <stop offset="70%" style="stop-color:#F5F5F5;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#E8E8E8;stop-opacity:1" />
+                        </radialGradient>
+                    </defs>
+                    <!-- Corpo do cap -->
+                    <circle cx="20" cy="20" r="16" fill="url(#capGrad)" stroke="#CCCCCC" stroke-width="1"/>
+                    <!-- Conexão -->
+                    <rect x="16" y="32" width="8" height="6" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <!-- Anel de vedação -->
+                    <circle cx="20" cy="20" r="12" fill="none" stroke="#CCCCCC" stroke-width="1"/>
+                    <!-- Ponto central -->
+                    <circle cx="20" cy="20" r="2" fill="#CCCCCC"/>
+                    <!-- Marcação -->
+                    <text x="20" y="23" font-family="Arial" font-size="5" fill="#666" text-anchor="middle">CAP</text>
+                </svg>`
+            },
+            {
+                id: 'reducao-100-75',
+                nome: 'Redução 100x75mm',
+                preco: 15.30,
+                codigo: 'TG-RED-100-75',
+                largura: 60,
+                altura: 40,
+                svg: `<svg viewBox="0 0 60 40" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="reducaoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#F8F8F8;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#FFFFFF;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#F0F0F0;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Corpo da redução -->
+                    <path d="M 5 5 L 55 15 L 55 25 L 5 35 Z" fill="url(#reducaoGrad)" stroke="#CCCCCC" stroke-width="1"/>
+                    <!-- Conexão maior -->
+                    <rect x="2" y="8" width="6" height="24" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <!-- Conexão menor -->
+                    <rect x="52" y="13" width="6" height="14" fill="#E0E0E0" stroke="#CCCCCC"/>
+                    <!-- Marcações -->
+                    <text x="15" y="22" font-family="Arial" font-size="5" fill="#666">100</text>
+                    <text x="40" y="22" font-family="Arial" font-size="5" fill="#666">75</text>
+                </svg>`
+            },
+            {
+                id: 'curva-45-100',
+                nome: 'Curva 45° 100mm',
+                preco: 14.20,
+                codigo: 'TG-C45-100',
+                largura: 80,
+                altura: 60,
+                svg: `<svg viewBox="0 0 80 60" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="curvaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#8B4513;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#A0522D;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#654321;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Corpo da curva -->
+                    <path d="M 10 50 Q 30 30 70 40" fill="none" stroke="url(#curvaGrad)" stroke-width="12" stroke-linecap="round"/>
+                    <!-- Conexões -->
+                    <rect x="5" y="45" width="10" height="10" fill="#8B4513" stroke="#5D4037"/>
+                    <rect x="65" y="35" width="10" height="10" fill="#8B4513" stroke="#5D4037"/>
+                    <!-- Detalhes de rosca -->
+                    <circle cx="10" cy="50" r="3" fill="none" stroke="#5D4037" stroke-width="1"/>
+                    <circle cx="70" cy="40" r="3" fill="none" stroke="#5D4037" stroke-width="1"/>
+                    <!-- Marcação -->
+                    <text x="40" y="35" font-family="Arial" font-size="6" fill="#FFF" text-anchor="middle">45°</text>
+                </svg>`
+            }
+        ];
+
+        // Estado da aplicação
+        let appData = {
+            pecasCanvas: [],
+            proximoId: 1,
+            pecaSelecionada: null,
+            isDragging: false,
+            dragOffset: { x: 0, y: 0 }
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarPecasDisponiveis();
+            setupCanvasEvents();
+            atualizarListaMateriais();
+        });
+
+        // Carregar peças disponíveis na sidebar
+        function carregarPecasDisponiveis() {
+            const container = document.getElementById('pecas-disponiveis');
+            container.innerHTML = '';
+
+            pecasDisponiveis.forEach(peca => {
+                const pecaElement = document.createElement('div');
+                pecaElement.className = 'peca-item';
+                pecaElement.draggable = true;
+                pecaElement.dataset.pecaId = peca.id;
+
+                pecaElement.innerHTML = `
+                    <div class="peca-svg">${peca.svg}</div>
+                    <div class="peca-info">
+                        <div class="peca-nome">${peca.nome}</div>
+                        <div class="peca-preco">R$ ${peca.preco.toFixed(2)} - ${peca.codigo}</div>
+                    </div>
+                `;
+
+                // Eventos de drag
+                pecaElement.addEventListener('dragstart', handleDragStart);
+                pecaElement.addEventListener('click', adicionarPecaAoCanvas);
+
+                container.appendChild(pecaElement);
+            });
+        }
+
+        // Adicionar peça ao canvas
+        function adicionarPecaAoCanvas(event) {
+            const pecaId = event.currentTarget.dataset.pecaId;
+            const pecaTemplate = pecasDisponiveis.find(p => p.id === pecaId);
+            
+            if (!pecaTemplate) return;
+
+            const novaPeca = {
+                id: appData.proximoId++,
+                tipo: pecaId,
+                nome: pecaTemplate.nome,
+                preco: pecaTemplate.preco,
+                x: Math.random() * 300 + 50,
+                y: Math.random() * 200 + 50,
+                largura: pecaTemplate.largura,
+                altura: pecaTemplate.altura,
+                svg: pecaTemplate.svg,
+                rotacao: 0
+            };
+
+            appData.pecasCanvas.push(novaPeca);
+            renderizarCanvas();
+            atualizarListaMateriais();
+        }
+
+        // Renderizar canvas
+        function renderizarCanvas() {
+            const canvas = document.getElementById('canvas-area');
+            
+            // Limpar peças existentes
+            const pecasExistentes = canvas.querySelectorAll('.canvas-peca');
+            pecasExistentes.forEach(peca => peca.remove());
+
+            // Adicionar peças
+            appData.pecasCanvas.forEach(peca => {
+                const pecaElement = document.createElement('div');
+                pecaElement.className = 'canvas-peca';
+                pecaElement.dataset.pecaId = peca.id;
+                pecaElement.style.left = peca.x + 'px';
+                pecaElement.style.top = peca.y + 'px';
+                pecaElement.style.width = peca.largura + 'px';
+                pecaElement.style.height = peca.altura + 'px';
+                pecaElement.style.transform = `rotate(${peca.rotacao}deg)`;
+                pecaElement.innerHTML = peca.svg;
+
+                // Eventos de mouse
+                pecaElement.addEventListener('mousedown', iniciarArrastar);
+                pecaElement.addEventListener('click', selecionarPeca);
+                pecaElement.addEventListener('dblclick', rotacionarPeca);
+
+                canvas.appendChild(pecaElement);
+            });
+        }
+
+        // Configurar eventos do canvas
+        function setupCanvasEvents() {
+            const canvas = document.getElementById('canvas-area');
+            
+            canvas.addEventListener('dragover', handleDragOver);
+            canvas.addEventListener('drop', handleDrop);
+            canvas.addEventListener('click', desselecionarPeca);
+            canvas.addEventListener('mousemove', arrastar);
+            canvas.addEventListener('mouseup', pararArrastar);
+        }
+
+        // Eventos de drag and drop
+        function handleDragStart(event) {
+            event.dataTransfer.setData('text/plain', event.currentTarget.dataset.pecaId);
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const pecaId = event.dataTransfer.getData('text/plain');
+            const pecaTemplate = pecasDisponiveis.find(p => p.id === pecaId);
+            
+            if (!pecaTemplate) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            const novaPeca = {
+                id: appData.proximoId++,
+                tipo: pecaId,
+                nome: pecaTemplate.nome,
+                preco: pecaTemplate.preco,
+                x: x - pecaTemplate.largura / 2,
+                y: y - pecaTemplate.altura / 2,
+                largura: pecaTemplate.largura,
+                altura: pecaTemplate.altura,
+                svg: pecaTemplate.svg,
+                rotacao: 0
+            };
+
+            appData.pecasCanvas.push(novaPeca);
+            renderizarCanvas();
+            atualizarListaMateriais();
+        }
+
+        // Arrastar peças no canvas
+        function iniciarArrastar(event) {
+            event.stopPropagation();
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            const peca = appData.pecasCanvas.find(p => p.id === pecaId);
+            
+            if (!peca) return;
+
+            appData.isDragging = true;
+            appData.pecaSelecionada = peca;
+            
+            const rect = event.currentTarget.getBoundingClientRect();
+            appData.dragOffset = {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+
+            selecionarPeca(event);
+        }
+
+        function arrastar(event) {
+            if (!appData.isDragging || !appData.pecaSelecionada) return;
+
+            const canvas = document.getElementById('canvas-area');
+            const rect = canvas.getBoundingClientRect();
+            
+            const novoX = event.clientX - rect.left - appData.dragOffset.x;
+            const novoY = event.clientY - rect.top - appData.dragOffset.y;
+
+            // Limitar às bordas do canvas
+            const maxX = canvas.clientWidth - appData.pecaSelecionada.largura;
+            const maxY = canvas.clientHeight - appData.pecaSelecionada.altura;
+
+            appData.pecaSelecionada.x = Math.max(0, Math.min(novoX, maxX));
+            appData.pecaSelecionada.y = Math.max(0, Math.min(novoY, maxY));
+
+            renderizarCanvas();
+        }
+
+        function pararArrastar() {
+            appData.isDragging = false;
+        }
+
+        // Seleção de peças
+        function selecionarPeca(event) {
+            event.stopPropagation();
+            
+            // Remover seleção anterior
+            document.querySelectorAll('.canvas-peca').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Selecionar nova peça
+            event.currentTarget.classList.add('selected');
+            
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            appData.pecaSelecionada = appData.pecasCanvas.find(p => p.id === pecaId);
+        }
+
+        function desselecionarPeca(event) {
+            if (event.target.classList.contains('canvas-area')) {
+                document.querySelectorAll('.canvas-peca').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                appData.pecaSelecionada = null;
+            }
+        }
+
+        // Rotacionar peça
+        function rotacionarPeca(event) {
+            event.stopPropagation();
+            const pecaId = parseInt(event.currentTarget.dataset.pecaId);
+            const peca = appData.pecasCanvas.find(p => p.id === pecaId);
+            
+            if (peca) {
+                peca.rotacao = (peca.rotacao + 90) % 360;
+                renderizarCanvas();
+            }
+        }
+
+        // Atualizar lista de materiais
+        function atualizarListaMateriais() {
+            const container = document.getElementById('lista-materiais');
+            const totalElement = document.getElementById('total-custo');
+
+            if (appData.pecasCanvas.length === 0) {
+                container.innerHTML = '<div class="material-item"><span class="material-nome">Nenhuma peça adicionada</span></div>';
+                totalElement.textContent = 'Total: R$ 0,00';
+                return;
+            }
+
+            // Agrupar peças por tipo
+            const materiais = {};
+            let total = 0;
+
+            appData.pecasCanvas.forEach(peca => {
+                if (!materiais[peca.tipo]) {
+                    materiais[peca.tipo] = {
+                        nome: peca.nome,
+                        preco: peca.preco,
+                        quantidade: 0
+                    };
+                }
+                materiais[peca.tipo].quantidade++;
+                total += peca.preco;
+            });
+
+            // Renderizar lista
+            container.innerHTML = '';
+            Object.values(materiais).forEach(material => {
+                const item = document.createElement('div');
+                item.className = 'material-item';
+                item.innerHTML = `
+                    <span class="material-nome">${material.nome}</span>
+                    <span class="material-qtd">${material.quantidade}x</span>
+                `;
+                container.appendChild(item);
+            });
+
+            totalElement.textContent = `Total: R$ ${total.toFixed(2)}`;
+        }
+
+        // Funções dos botões
+        function novaObra() {
+            if (confirm('Deseja criar uma nova obra? Todos os dados atuais serão perdidos.')) {
+                appData.pecasCanvas = [];
+                appData.proximoId = 1;
+                appData.pecaSelecionada = null;
+                renderizarCanvas();
+                atualizarListaMateriais();
+            }
+        }
+
+        function importarDWG() {
+            alert('Funcionalidade de importação DWG em desenvolvimento.');
+        }
+
+        function calcularMateriais() {
+            const total = appData.pecasCanvas.reduce((sum, peca) => sum + peca.preco, 0);
+            const quantidade = appData.pecasCanvas.length;
+            
+            alert(`Resumo do Projeto:\n\nQuantidade de peças: ${quantidade}\nCusto total: R$ ${total.toFixed(2)}`);
+        }
+
+        function exportarPDF() {
+            alert('Funcionalidade de exportação PDF em desenvolvimento.');
+        }
+
+        // Atalhos de teclado
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Delete' && appData.pecaSelecionada) {
+                const index = appData.pecasCanvas.findIndex(p => p.id === appData.pecaSelecionada.id);
+                if (index !== -1) {
+                    appData.pecasCanvas.splice(index, 1);
+                    appData.pecaSelecionada = null;
+                    renderizarCanvas();
+                    atualizarListaMateriais();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
