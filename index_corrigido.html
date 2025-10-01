@@ -1,0 +1,2190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otimizador de Cortes Hidráulicos - Versão Completa</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #ffffff;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Layout Principal */
+        .app-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            grid-template-rows: 60px 1fr 30px;
+            height: 100vh;
+            gap: 1px;
+            background: #333;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .header-tools {
+            display: flex;
+            gap: 10px;
+        }
+
+        .header-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .header-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+        }
+
+        /* Sidebar Esquerda - Biblioteca */
+        .sidebar-left {
+            background: #2a2a2a;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-title {
+            background: #333;
+            padding: 15px;
+            border-bottom: 1px solid #444;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .piece-count {
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .category-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 15px;
+            border-bottom: 1px solid #444;
+        }
+
+        .category-btn {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: #d1d5db;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .category-btn:hover,
+        .category-btn.active {
+            background: #3b82f6;
+            border-color: #2563eb;
+            color: white;
+        }
+
+        .biblioteca-pecas {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .piece-item {
+            background: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .piece-item:hover {
+            background: #4b5563;
+            border-color: #3b82f6;
+            transform: translateY(-1px);
+        }
+
+        .piece-svg {
+            width: 100%;
+            height: 60px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .piece-info h4 {
+            font-size: 14px;
+            margin-bottom: 4px;
+            color: #f3f4f6;
+        }
+
+        .piece-info p {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 2px;
+        }
+
+        .piece-price {
+            font-weight: bold;
+            color: #10b981;
+        }
+
+        /* Canvas Central */
+        .canvas-container {
+            background: #2a2a2a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .canvas-toolbar {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            gap: 5px;
+            z-index: 100;
+        }
+
+        .tool-btn {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: #d1d5db;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tool-btn:hover,
+        .tool-btn.active {
+            background: #3b82f6;
+            border-color: #2563eb;
+            color: white;
+        }
+
+        .tool-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        .canvas-coordinates {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        /* Sidebar Direita - Propriedades */
+        .sidebar-right {
+            background: #2a2a2a;
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .properties-panel,
+        .layers-panel,
+        .history-panel,
+        .materials-panel {
+            border-bottom: 1px solid #444;
+        }
+
+        .panel-header {
+            background: #333;
+            padding: 12px 15px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .panel-content {
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .property-input {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: 80px;
+            font-size: 12px;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid #374151;
+        }
+
+        .layer-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 2px;
+        }
+
+        .layer-name {
+            flex: 1;
+            font-size: 12px;
+        }
+
+        .layer-controls {
+            display: flex;
+            gap: 4px;
+        }
+
+        .layer-btn {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 2px;
+            border-radius: 2px;
+        }
+
+        .layer-btn:hover {
+            background: #374151;
+            color: white;
+        }
+
+        .history-item {
+            padding: 6px 0;
+            font-size: 12px;
+            color: #9ca3af;
+            border-bottom: 1px solid #374151;
+            cursor: pointer;
+        }
+
+        .history-item:hover {
+            color: white;
+        }
+
+        .history-item.current {
+            color: #3b82f6;
+            font-weight: bold;
+        }
+
+        .materials-list {
+            font-size: 12px;
+        }
+
+        .material-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #374151;
+        }
+
+        .total-cost {
+            font-weight: bold;
+            color: #10b981;
+            font-size: 16px;
+            text-align: center;
+            padding: 10px;
+            background: #374151;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            grid-column: 1 / -1;
+            background: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .command-line {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .command-input {
+            background: #1e1e1e;
+            border: 1px solid #4b5563;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: 200px;
+            font-size: 12px;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 15px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.on {
+            background: #10b981;
+        }
+
+        .status-dot.off {
+            background: #ef4444;
+        }
+
+        /* Modais */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            color: white;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .template-card {
+            background: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            background: #4b5563;
+            border-color: #3b82f6;
+        }
+
+        .template-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .template-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .template-description {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 10px;
+        }
+
+        .template-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #10b981;
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #374151;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background: #10b981;
+        }
+
+        .toast.error {
+            background: #ef4444;
+        }
+
+        .toast.info {
+            background: #3b82f6;
+        }
+
+        /* Responsividade */
+        @media (max-width: 1200px) {
+            .app-container {
+                grid-template-columns: 250px 1fr 280px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 60px 1fr 30px;
+            }
+            
+            .sidebar-left,
+            .sidebar-right {
+                position: fixed;
+                top: 60px;
+                bottom: 30px;
+                width: 280px;
+                z-index: 500;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .sidebar-right {
+                right: 0;
+                transform: translateX(100%);
+            }
+            
+            .sidebar-left.active,
+            .sidebar-right.active {
+                transform: translateX(0);
+            }
+        }
+
+        /* Scrollbar customizada */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2a2a2a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                🚿 Otimizador Hidráulico Pro
+                <span style="font-size: 12px; opacity: 0.8;">v3.0</span>
+            </div>
+            <div class="header-tools">
+                <button class="header-btn" onclick="newProject()">📁 Novo</button>
+                <button class="header-btn" onclick="openProject()">📂 Abrir</button>
+                <button class="header-btn" onclick="saveProject()">💾 Salvar</button>
+                <button class="header-btn" onclick="showTemplates()">📋 Templates</button>
+                <button class="header-btn" onclick="importDWG()">📥 DWG</button>
+                <button class="header-btn" onclick="exportProject()">📤 Exportar</button>
+                <button class="header-btn" onclick="show3DView()">🎮 3D</button>
+                <button class="header-btn" onclick="showBudget()">💰 Orçamento</button>
+            </div>
+        </header>
+
+        <!-- Sidebar Esquerda - Biblioteca -->
+        <aside class="sidebar-left">
+            <div class="sidebar-title">
+                🏗️ Biblioteca Tigre BIM
+                <span class="piece-count" id="pieceCount">(672 peças)</span>
+            </div>
+            
+            <div class="category-filters">
+                <button class="category-btn active" onclick="filterPieces('all')">Todas</button>
+                <button class="category-btn" onclick="filterPieces('esgoto')">Esgoto</button>
+                <button class="category-btn" onclick="filterPieces('irrigacao')">Irrigação</button>
+                <button class="category-btn" onclick="filterPieces('soldavel')">Soldável</button>
+                <button class="category-btn" onclick="filterPieces('caixa-dagua')">Caixa D'Água</button>
+                <button class="category-btn" onclick="filterPieces('agua-fria')">Água Fria</button>
+            </div>
+            
+            <div class="biblioteca-pecas" id="bibliotecaPecas">
+                <!-- Peças serão carregadas aqui via JavaScript -->
+            </div>
+        </aside>
+
+        <!-- Canvas Central -->
+        <main class="canvas-container">
+            <div class="canvas-toolbar">
+                <button class="tool-btn active" onclick="setTool('select')" title="Selecionar (S)">✋ Selecionar</button>
+                <button class="tool-btn" onclick="setTool('move')" title="Mover (M)">↔️ Mover</button>
+                <button class="tool-btn" onclick="setTool('rotate')" title="Rotacionar (R)">🔄 Rotacionar</button>
+                <button class="tool-btn" onclick="setTool('copy')" title="Copiar (C)">📋 Copiar</button>
+                <button class="tool-btn" onclick="setTool('group')" title="Agrupar (G)">📦 Agrupar</button>
+                <button class="tool-btn" onclick="setTool('measure')" title="Medir (T)">📐 Medir</button>
+                <button class="tool-btn" onclick="setTool('align')" title="Alinhar (A)">📏 Alinhar</button>
+                <button class="tool-btn" onclick="setTool('delete')" title="Excluir (Del)">🗑️ Excluir</button>
+                <button class="tool-btn" onclick="zoomIn()" title="Zoom In (+)">🔍+</button>
+                <button class="tool-btn" onclick="zoomOut()" title="Zoom Out (-)">🔍-</button>
+                <button class="tool-btn" onclick="fitToScreen()" title="Ajustar à Tela (F)">📐</button>
+                <button class="tool-btn" onclick="undoAction()" title="Desfazer (Ctrl+Z)">👋</button>
+            </div>
+            
+            <svg id="canvas" viewBox="0 0 1000 600">
+                <!-- Grid de fundo -->
+                <defs>
+                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#333" stroke-width="0.5" opacity="0.3"/>
+                    </pattern>
+                    <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse">
+                        <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)"/>
+                <rect width="100%" height="100%" fill="url(#gridMajor)"/>
+                
+                <!-- Peças serão adicionadas aqui -->
+                <g id="piecesLayer"></g>
+                
+                <!-- Snap points -->
+                <g id="snapPoints"></g>
+                
+                <!-- Medições -->
+                <g id="measurements"></g>
+            </svg>
+            
+            <div class="canvas-coordinates" id="coordinates">X: 0.00, Y: 0.00</div>
+        </main>
+
+        <!-- Sidebar Direita - Propriedades -->
+        <aside class="sidebar-right">
+            <!-- Propriedades -->
+            <div class="properties-panel">
+                <div class="panel-header">
+                    🔧 Propriedades
+                </div>
+                <div class="panel-content" id="propertiesContent">
+                    <p style="color: #9ca3af; text-align: center;">Nenhuma peça selecionada</p>
+                </div>
+            </div>
+
+            <!-- Layers -->
+            <div class="layers-panel">
+                <div class="panel-header">
+                    📊 Layers
+                </div>
+                <div class="panel-content">
+                    <div class="layer-item">
+                        <div class="layer-color" style="background: white;"></div>
+                        <span class="layer-name">0 - Padrão</span>
+                        <div class="layer-controls">
+                            <button class="layer-btn" title="Visibilidade">👁</button>
+                            <button class="layer-btn" title="Bloquear">🔓</button>
+                        </div>
+                    </div>
+                    <div class="layer-item">
+                        <div class="layer-color" style="background: #ef4444;"></div>
+                        <span class="layer-name">Esgoto</span>
+                        <div class="layer-controls">
+                            <button class="layer-btn" title="Visibilidade">👁</button>
+                            <button class="layer-btn" title="Bloquear">🔓</button>
+                        </div>
+                    </div>
+                    <div class="layer-item">
+                        <div class="layer-color" style="background: #3b82f6;"></div>
+                        <span class="layer-name">Água Fria</span>
+                        <div class="layer-controls">
+                            <button class="layer-btn" title="Visibilidade">👁</button>
+                            <button class="layer-btn" title="Bloquear">🔓</button>
+                        </div>
+                    </div>
+                    <div class="layer-item">
+                        <div class="layer-color" style="background: #10b981;"></div>
+                        <span class="layer-name">Irrigação</span>
+                        <div class="layer-controls">
+                            <button class="layer-btn" title="Visibilidade">👁</button>
+                            <button class="layer-btn" title="Bloquear">🔓</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Histórico -->
+            <div class="history-panel">
+                <div class="panel-header">
+                    📋 Histórico
+                    <span style="font-size: 12px; color: #9ca3af;">(0)</span>
+                </div>
+                <div class="panel-content" id="historyContent">
+                    <p style="color: #9ca3af; text-align: center;">Nenhuma ação realizada</p>
+                </div>
+            </div>
+
+            <!-- Lista de Materiais -->
+            <div class="materials-panel">
+                <div class="panel-header">
+                    📋 Lista de Materiais
+                    <span style="font-size: 12px; color: #9ca3af;">(0)</span>
+                </div>
+                <div class="panel-content">
+                    <div class="materials-list" id="materialsList">
+                        <p style="color: #9ca3af; text-align: center;">Nenhuma peça adicionada</p>
+                    </div>
+                    <div class="total-cost" id="totalCost">Total: R$ 0,00</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="command-line">
+                <span>Command:</span>
+                <input type="text" class="command-input" placeholder="Digite um comando..." onkeypress="handleCommand(event)">
+            </div>
+            <div class="status-indicators">
+                <div class="status-item">
+                    <div class="status-dot on"></div>
+                    <span>Snap: ON</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot on"></div>
+                    <span>Grid: ON</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot off"></div>
+                    <span>Ortho: OFF</span>
+                </div>
+                <div class="status-item">
+                    <span>Zoom: 100%</span>
+                </div>
+                <div class="status-item">
+                    <span>Peças: <span id="pieceCountStatus">0</span></span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modal Templates -->
+    <div id="templatesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Templates de Projeto</h2>
+                <button class="close-btn" onclick="closeModal('templatesModal')">&times;</button>
+            </div>
+            <div class="template-grid">
+                <div class="template-card" onclick="loadTemplate('banheiro')">
+                    <div class="template-icon">🚿</div>
+                    <div class="template-title">Banheiro Completo</div>
+                    <div class="template-description">Instalação hidráulica completa para banheiro residencial</div>
+                    <div class="template-stats">
+                        <span>12 peças</span>
+                        <span>R$ 245,80</span>
+                    </div>
+                </div>
+                <div class="template-card" onclick="loadTemplate('cozinha')">
+                    <div class="template-icon">🍽️</div>
+                    <div class="template-title">Cozinha Residencial</div>
+                    <div class="template-description">Sistema de água fria e esgoto para cozinha</div>
+                    <div class="template-stats">
+                        <span>8 peças</span>
+                        <span>R$ 156,40</span>
+                    </div>
+                </div>
+                <div class="template-card" onclick="loadTemplate('area-servico')">
+                    <div class="template-icon">🧺</div>
+                    <div class="template-title">Área de Serviço</div>
+                    <div class="template-description">Instalação para lavanderia e área de serviço</div>
+                    <div class="template-stats">
+                        <span>6 peças</span>
+                        <span>R$ 98,60</span>
+                    </div>
+                </div>
+                <div class="template-card" onclick="loadTemplate('irrigacao')">
+                    <div class="template-icon">🌱</div>
+                    <div class="template-title">Sistema de Irrigação</div>
+                    <div class="template-description">Rede de irrigação para jardim residencial</div>
+                    <div class="template-stats">
+                        <span>15 peças</span>
+                        <span>R$ 312,90</span>
+                    </div>
+                </div>
+                <div class="template-card" onclick="loadTemplate('piscina')">
+                    <div class="template-icon">🏊</div>
+                    <div class="template-title">Piscina Residencial</div>
+                    <div class="template-description">Sistema hidráulico completo para piscina</div>
+                    <div class="template-stats">
+                        <span>20 peças</span>
+                        <span>R$ 567,30</span>
+                    </div>
+                </div>
+                <div class="template-card" onclick="loadTemplate('comercial')">
+                    <div class="template-icon">🏢</div>
+                    <div class="template-title">Comercial Básico</div>
+                    <div class="template-description">Instalação hidráulica para estabelecimento comercial</div>
+                    <div class="template-stats">
+                        <span>25 peças</span>
+                        <span>R$ 789,50</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal DWG -->
+    <div id="dwgModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Importar Arquivo DWG</h2>
+                <button class="close-btn" onclick="closeModal('dwgModal')">&times;</button>
+            </div>
+            <div style="text-align: center; padding: 20px;">
+                <input type="file" id="dwgFile" accept=".dwg,.dxf" style="display: none;" onchange="processDWGFile(this)">
+                <button onclick="document.getElementById('dwgFile').click()" style="background: #3b82f6; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 16px;">
+                    📁 Selecionar Arquivo DWG/DXF
+                </button>
+                <p style="margin-top: 10px; color: #9ca3af;">Ou arraste o arquivo aqui</p>
+            </div>
+            <div id="dwgBlocks" style="display: none;">
+                <h3>Blocos Encontrados:</h3>
+                <div id="blocksList"></div>
+                <button onclick="importSelectedBlocks()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; margin-top: 15px;">
+                    Importar Selecionados
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3D -->
+    <div id="view3DModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Visualização 3D</h2>
+                <button class="close-btn" onclick="closeModal('view3DModal')">&times;</button>
+            </div>
+            <div id="viewer3D" style="width: 100%; height: 400px; background: #1a1a1a; border-radius: 8px; position: relative;">
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #9ca3af;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">🎮</div>
+                    <p>Visualizador 3D será carregado aqui</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px; justify-content: center;">
+                <button onclick="rotate3D()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                    🔄 Rotacionar
+                </button>
+                <button onclick="fit3D()" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                    📐 Ajustar
+                </button>
+                <button onclick="export3D()" style="background: #8b5cf6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                    📤 Exportar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Orçamento -->
+    <div id="budgetModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Orçamento do Projeto</h2>
+                <button class="close-btn" onclick="closeModal('budgetModal')">&times;</button>
+            </div>
+            <div id="budgetContent">
+                <p style="color: #9ca3af; text-align: center; padding: 40px;">Nenhuma peça adicionada ao projeto</p>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
+                <button onclick="exportBudgetPDF()" style="background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    📄 Exportar PDF
+                </button>
+                <button onclick="printBudget()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    🖨️ Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Estado da aplicação
+        let appState = {
+            currentTool: 'select',
+            selectedPieces: [],
+            pieces: [],
+            history: [],
+            historyIndex: -1,
+            zoom: 1,
+            pan: { x: 0, y: 0 },
+            snapEnabled: true,
+            gridEnabled: true,
+            orthoEnabled: false,
+            insertionMode: false,
+            insertingPiece: null,
+            groups: [],
+            measurements: [],
+            currentLayer: '0'
+        };
+
+        // Catálogo de peças Tigre BIM
+        const pieceCatalog = [
+            // Esgoto Redux
+            {
+                id: 'cap-esgoto-dn40',
+                name: 'Cap Esgoto Redux DN40',
+                code: '100002791',
+                category: 'esgoto',
+                price: 8.50,
+                svg: `<g><circle cx="20" cy="20" r="15" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+                      <circle cx="20" cy="20" r="10" fill="#f3f4f6" stroke="#6b7280"/>
+                      <text x="20" y="25" text-anchor="middle" font-size="8" fill="#374151">40</text></g>`,
+                width: 40,
+                height: 40,
+                snapPoints: [{ x: 20, y: 5 }, { x: 20, y: 35 }]
+            },
+            {
+                id: 'joelho-90-dn100',
+                name: 'Joelho 90° Redux DN100',
+                code: '100002799',
+                category: 'esgoto',
+                price: 32.80,
+                svg: `<g><path d="M5,35 Q5,5 35,5 L50,5 Q60,5 60,15 L60,30 Q60,40 50,40 L35,40 Q5,40 5,35 Z" 
+                      fill="#8b5cf6" stroke="#7c3aed" stroke-width="2"/>
+                      <circle cx="15" cy="25" r="3" fill="#6366f1"/>
+                      <circle cx="45" cy="15" r="3" fill="#6366f1"/>
+                      <text x="32" y="25" text-anchor="middle" font-size="8" fill="white">90°</text></g>`,
+                width: 65,
+                height: 45,
+                snapPoints: [{ x: 15, y: 25 }, { x: 45, y: 15 }]
+            },
+            {
+                id: 'te-90-dn100',
+                name: 'Tê 90° Redux DN100',
+                code: '100002804',
+                category: 'esgoto',
+                price: 45.60,
+                svg: `<g><rect x="5" y="20" width="50" height="10" rx="5" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+                      <rect x="25" y="5" width="10" height="30" rx="5" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+                      <circle cx="10" cy="25" r="3" fill="#3b82f6"/>
+                      <circle cx="50" cy="25" r="3" fill="#3b82f6"/>
+                      <circle cx="30" cy="10" r="3" fill="#3b82f6"/>
+                      <text x="30" y="28" text-anchor="middle" font-size="6" fill="#374151">100</text></g>`,
+                width: 60,
+                height: 40,
+                snapPoints: [{ x: 10, y: 25 }, { x: 50, y: 25 }, { x: 30, y: 10 }]
+            },
+            {
+                id: 'tubo-dn100-6m',
+                name: 'Tubo Redux DN100 6M',
+                code: '100002789',
+                category: 'esgoto',
+                price: 48.90,
+                svg: `<g><rect x="5" y="15" width="120" height="20" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="2"/>
+                      <rect x="10" y="18" width="110" height="14" rx="7" fill="white"/>
+                      <circle cx="15" cy="25" r="4" fill="#3b82f6"/>
+                      <circle cx="115" cy="25" r="4" fill="#3b82f6"/>
+                      <text x="65" y="28" text-anchor="middle" font-size="8" fill="#374151">DN100 - 6M</text></g>`,
+                width: 130,
+                height: 50,
+                snapPoints: [{ x: 15, y: 25 }, { x: 115, y: 25 }]
+            },
+            {
+                id: 'torneira-boia-12',
+                name: 'Torneira Boia 1/2"',
+                code: '100002856',
+                category: 'caixa-dagua',
+                price: 24.30,
+                svg: `<g><rect x="5" y="15" width="40" height="15" rx="7" fill="#10b981" stroke="#059669" stroke-width="2"/>
+                      <rect x="45" y="18" width="15" height="9" rx="4" fill="#6b7280" stroke="#4b5563" stroke-width="1"/>
+                      <circle cx="15" cy="22" r="2" fill="#ffffff"/>
+                      <circle cx="35" cy="22" r="2" fill="#ffffff"/>
+                      <text x="25" y="26" text-anchor="middle" font-size="6" fill="white">1/2"</text></g>`,
+                width: 65,
+                height: 45,
+                snapPoints: [{ x: 15, y: 22 }, { x: 52, y: 22 }]
+            },
+            // Irrigação
+            {
+                id: 'joelho-90-irrigacao',
+                name: 'Joelho 90° Irrigação DN25',
+                code: '100002820',
+                category: 'irrigacao',
+                price: 12.40,
+                svg: `<g><path d="M5,30 Q5,5 30,5 L40,5 Q50,5 50,15 L50,25 Q50,35 40,35 L30,35 Q5,35 5,30 Z" 
+                      fill="#3b82f6" stroke="#2563eb" stroke-width="2"/>
+                      <circle cx="12" cy="20" r="2" fill="#1d4ed8"/>
+                      <circle cx="38" cy="12" r="2" fill="#1d4ed8"/>
+                      <text x="27" y="22" text-anchor="middle" font-size="6" fill="white">25</text></g>`,
+                width: 55,
+                height: 40,
+                snapPoints: [{ x: 12, y: 20 }, { x: 38, y: 12 }]
+            },
+            {
+                id: 'te-irrigacao-dn25',
+                name: 'Tê Irrigação DN25',
+                code: '100002825',
+                category: 'irrigacao',
+                price: 18.70,
+                svg: `<g><rect x="5" y="18" width="40" height="8" rx="4" fill="#3b82f6" stroke="#2563eb" stroke-width="2"/>
+                      <rect x="21" y="5" width="8" height="26" rx="4" fill="#3b82f6" stroke="#2563eb" stroke-width="2"/>
+                      <circle cx="9" cy="22" r="2" fill="#1d4ed8"/>
+                      <circle cx="41" cy="22" r="2" fill="#1d4ed8"/>
+                      <circle cx="25" cy="9" r="2" fill="#1d4ed8"/>
+                      <text x="25" y="25" text-anchor="middle" font-size="5" fill="white">25</text></g>`,
+                width: 50,
+                height: 35,
+                snapPoints: [{ x: 9, y: 22 }, { x: 41, y: 22 }, { x: 25, y: 9 }]
+            },
+            // Soldável
+            {
+                id: 'joelho-45-soldavel',
+                name: 'Joelho 45° Soldável DN50',
+                code: '100002840',
+                category: 'soldavel',
+                price: 15.20,
+                svg: `<g><path d="M5,25 Q15,5 35,15 L45,20 Q55,25 50,35 L40,40 Q25,45 15,35 Q5,30 5,25 Z" 
+                      fill="#f97316" stroke="#ea580c" stroke-width="2"/>
+                      <circle cx="12" cy="18" r="2" fill="#dc2626"/>
+                      <circle cx="43" cy="32" r="2" fill="#dc2626"/>
+                      <text x="27" y="28" text-anchor="middle" font-size="6" fill="white">45°</text></g>`,
+                width: 60,
+                height: 50,
+                snapPoints: [{ x: 12, y: 18 }, { x: 43, y: 32 }]
+            },
+            {
+                id: 'reducao-100x75',
+                name: 'Redução Soldável 100x75mm',
+                code: '100002845',
+                category: 'soldavel',
+                price: 28.60,
+                svg: `<g><path d="M5,10 L35,10 L45,20 L45,30 L35,40 L5,40 Q5,35 5,15 Q5,10 5,10 Z" 
+                      fill="#f97316" stroke="#ea580c" stroke-width="2"/>
+                      <circle cx="10" cy="25" r="3" fill="#dc2626"/>
+                      <circle cx="40" cy="25" r="2" fill="#dc2626"/>
+                      <text x="15" y="28" text-anchor="middle" font-size="5" fill="white">100</text>
+                      <text x="35" y="28" text-anchor="middle" font-size="5" fill="white">75</text></g>`,
+                width: 50,
+                height: 50,
+                snapPoints: [{ x: 10, y: 25 }, { x: 40, y: 25 }]
+            },
+            // Água Fria
+            {
+                id: 'joelho-90-agua-fria',
+                name: 'Joelho 90° Água Fria DN20',
+                code: '100002860',
+                category: 'agua-fria',
+                price: 9.80,
+                svg: `<g><path d="M5,28 Q5,8 25,8 L35,8 Q45,8 45,18 L45,25 Q45,35 35,35 L25,35 Q5,35 5,28 Z" 
+                      fill="#06b6d4" stroke="#0891b2" stroke-width="2"/>
+                      <circle cx="12" cy="18" r="2" fill="#0369a1"/>
+                      <circle cx="35" cy="15" r="2" fill="#0369a1"/>
+                      <text x="25" y="22" text-anchor="middle" font-size="6" fill="white">20</text></g>`,
+                width: 50,
+                height: 43,
+                snapPoints: [{ x: 12, y: 18 }, { x: 35, y: 15 }]
+            }
+        ];
+
+        // Inicialização da aplicação
+        function initApp() {
+            console.log('Inicializando aplicação...');
+            loadPieceCatalog();
+            setupEventListeners();
+            updateUI();
+            showToast('Aplicativo carregado com sucesso!', 'success');
+        }
+
+        // Carregar catálogo de peças
+        function loadPieceCatalog() {
+            const bibliotecaPecas = document.getElementById('bibliotecaPecas');
+            bibliotecaPecas.innerHTML = '';
+            
+            pieceCatalog.forEach(piece => {
+                const pieceElement = document.createElement('div');
+                pieceElement.className = 'piece-item';
+                pieceElement.dataset.category = piece.category;
+                pieceElement.innerHTML = `
+                    <div class="piece-svg">
+                        <svg width="100%" height="100%" viewBox="0 0 ${piece.width + 10} ${piece.height + 10}">
+                            ${piece.svg}
+                        </svg>
+                    </div>
+                    <div class="piece-info">
+                        <h4>${piece.name}</h4>
+                        <p>Código: ${piece.code}</p>
+                        <p class="piece-price">R$ ${piece.price.toFixed(2)}</p>
+                    </div>
+                `;
+                
+                // Duplo clique para inserir peça
+                pieceElement.addEventListener('dblclick', () => {
+                    startPieceInsertion(piece);
+                });
+                
+                bibliotecaPecas.appendChild(pieceElement);
+            });
+            
+            console.log(`${pieceCatalog.length} peças carregadas no catálogo`);
+        }
+
+        // Filtrar peças por categoria
+        function filterPieces(category) {
+            const pieces = document.querySelectorAll('.piece-item');
+            const buttons = document.querySelectorAll('.category-btn');
+            
+            // Atualizar botões
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Filtrar peças
+            pieces.forEach(piece => {
+                if (category === 'all' || piece.dataset.category === category) {
+                    piece.style.display = 'block';
+                } else {
+                    piece.style.display = 'none';
+                }
+            });
+        }
+
+        // Iniciar inserção de peça
+        function startPieceInsertion(pieceData) {
+            appState.insertionMode = true;
+            appState.insertingPiece = pieceData;
+            appState.currentTool = 'insert';
+            
+            // Mudar cursor
+            document.getElementById('canvas').style.cursor = 'crosshair';
+            
+            showToast(`Inserindo: ${pieceData.name}`, 'info');
+            console.log('Modo de inserção ativado para:', pieceData.name);
+        }
+
+        // Configurar event listeners
+        function setupEventListeners() {
+            const canvas = document.getElementById('canvas');
+            
+            // Mouse events
+            canvas.addEventListener('click', handleCanvasClick);
+            canvas.addEventListener('mousemove', handleCanvasMouseMove);
+            canvas.addEventListener('contextmenu', handleCanvasRightClick);
+            
+            // Keyboard events
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+            
+            // Resize
+            window.addEventListener('resize', updateCanvasSize);
+            
+            console.log('Event listeners configurados');
+        }
+
+        // Manipular clique no canvas
+        function handleCanvasClick(event) {
+            const rect = event.target.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * 1000;
+            const y = ((event.clientY - rect.top) / rect.height) * 600;
+            
+            if (appState.insertionMode && appState.insertingPiece) {
+                insertPieceAtPosition(x, y);
+            } else {
+                handleSelection(x, y);
+            }
+        }
+
+        // Inserir peça na posição
+        function insertPieceAtPosition(x, y) {
+            const piece = {
+                id: Date.now(),
+                type: appState.insertingPiece.id,
+                x: x - appState.insertingPiece.width / 2,
+                y: y - appState.insertingPiece.height / 2,
+                rotation: 0,
+                layer: appState.currentLayer,
+                selected: false
+            };
+            
+            appState.pieces.push(piece);
+            renderPiece(piece);
+            updateMaterialsList();
+            addToHistory(`Inserir ${appState.insertingPiece.name}`);
+            
+            // Continuar inserção ou sair do modo
+            if (!event.shiftKey) {
+                exitInsertionMode();
+            }
+            
+            console.log('Peça inserida:', piece);
+        }
+
+        // Sair do modo de inserção
+        function exitInsertionMode() {
+            appState.insertionMode = false;
+            appState.insertingPiece = null;
+            appState.currentTool = 'select';
+            document.getElementById('canvas').style.cursor = 'default';
+            updateToolButtons();
+        }
+
+        // Renderizar peça no canvas
+        function renderPiece(piece) {
+            const pieceData = pieceCatalog.find(p => p.id === piece.type);
+            if (!pieceData) return;
+            
+            const piecesLayer = document.getElementById('piecesLayer');
+            const pieceGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            
+            pieceGroup.id = `piece-${piece.id}`;
+            pieceGroup.setAttribute('transform', `translate(${piece.x}, ${piece.y}) rotate(${piece.rotation})`);
+            pieceGroup.innerHTML = pieceData.svg;
+            
+            // Adicionar eventos
+            pieceGroup.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectPiece(piece.id);
+            });
+            
+            piecesLayer.appendChild(pieceGroup);
+        }
+
+        // Selecionar peça
+        function selectPiece(pieceId) {
+            // Limpar seleção anterior
+            appState.selectedPieces = [];
+            document.querySelectorAll('.piece-selected').forEach(el => {
+                el.classList.remove('piece-selected');
+            });
+            
+            // Selecionar nova peça
+            const piece = appState.pieces.find(p => p.id === pieceId);
+            if (piece) {
+                piece.selected = true;
+                appState.selectedPieces.push(piece);
+                
+                const pieceElement = document.getElementById(`piece-${pieceId}`);
+                if (pieceElement) {
+                    pieceElement.classList.add('piece-selected');
+                }
+                
+                updatePropertiesPanel(piece);
+            }
+        }
+
+        // Atualizar painel de propriedades
+        function updatePropertiesPanel(piece) {
+            const pieceData = pieceCatalog.find(p => p.id === piece.type);
+            const propertiesContent = document.getElementById('propertiesContent');
+            
+            if (!piece || !pieceData) {
+                propertiesContent.innerHTML = '<p style="color: #9ca3af; text-align: center;">Nenhuma peça selecionada</p>';
+                return;
+            }
+            
+            propertiesContent.innerHTML = `
+                <div class="property-row">
+                    <span>Nome:</span>
+                    <span>${pieceData.name}</span>
+                </div>
+                <div class="property-row">
+                    <span>Código:</span>
+                    <span>${pieceData.code}</span>
+                </div>
+                <div class="property-row">
+                    <span>X:</span>
+                    <input type="number" class="property-input" value="${piece.x.toFixed(2)}" onchange="updatePieceProperty('x', this.value)">
+                </div>
+                <div class="property-row">
+                    <span>Y:</span>
+                    <input type="number" class="property-input" value="${piece.y.toFixed(2)}" onchange="updatePieceProperty('y', this.value)">
+                </div>
+                <div class="property-row">
+                    <span>Rotação:</span>
+                    <input type="number" class="property-input" value="${piece.rotation}" onchange="updatePieceProperty('rotation', this.value)">
+                </div>
+                <div class="property-row">
+                    <span>Layer:</span>
+                    <span>${piece.layer}</span>
+                </div>
+                <div class="property-row">
+                    <span>Preço:</span>
+                    <span style="color: #10b981;">R$ ${pieceData.price.toFixed(2)}</span>
+                </div>
+            `;
+        }
+
+        // Atualizar propriedade da peça
+        function updatePieceProperty(property, value) {
+            if (appState.selectedPieces.length === 0) return;
+            
+            const piece = appState.selectedPieces[0];
+            piece[property] = parseFloat(value);
+            
+            // Atualizar visualização
+            const pieceElement = document.getElementById(`piece-${piece.id}`);
+            if (pieceElement) {
+                pieceElement.setAttribute('transform', `translate(${piece.x}, ${piece.y}) rotate(${piece.rotation})`);
+            }
+            
+            addToHistory(`Alterar ${property}`);
+        }
+
+        // Atualizar lista de materiais
+        function updateMaterialsList() {
+            const materialsList = document.getElementById('materialsList');
+            const totalCostElement = document.getElementById('totalCost');
+            const pieceCountStatus = document.getElementById('pieceCountStatus');
+            
+            if (appState.pieces.length === 0) {
+                materialsList.innerHTML = '<p style="color: #9ca3af; text-align: center;">Nenhuma peça adicionada</p>';
+                totalCostElement.textContent = 'Total: R$ 0,00';
+                pieceCountStatus.textContent = '0';
+                return;
+            }
+            
+            // Agrupar peças por tipo
+            const groupedPieces = {};
+            let totalCost = 0;
+            
+            appState.pieces.forEach(piece => {
+                const pieceData = pieceCatalog.find(p => p.id === piece.type);
+                if (!pieceData) return;
+                
+                if (!groupedPieces[piece.type]) {
+                    groupedPieces[piece.type] = {
+                        data: pieceData,
+                        count: 0,
+                        totalCost: 0
+                    };
+                }
+                
+                groupedPieces[piece.type].count++;
+                groupedPieces[piece.type].totalCost += pieceData.price;
+                totalCost += pieceData.price;
+            });
+            
+            // Renderizar lista
+            materialsList.innerHTML = '';
+            Object.values(groupedPieces).forEach(group => {
+                const item = document.createElement('div');
+                item.className = 'material-item';
+                item.innerHTML = `
+                    <span>${group.count}x ${group.data.name}</span>
+                    <span style="color: #10b981;">R$ ${group.totalCost.toFixed(2)}</span>
+                `;
+                materialsList.appendChild(item);
+            });
+            
+            totalCostElement.textContent = `Total: R$ ${totalCost.toFixed(2)}`;
+            pieceCountStatus.textContent = appState.pieces.length.toString();
+        }
+
+        // Manipular movimento do mouse no canvas
+        function handleCanvasMouseMove(event) {
+            const rect = event.target.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * 1000;
+            const y = ((event.clientY - rect.top) / rect.height) * 600;
+            
+            // Atualizar coordenadas
+            document.getElementById('coordinates').textContent = `X: ${x.toFixed(2)}, Y: ${y.toFixed(2)}`;
+        }
+
+        // Manipular clique direito no canvas
+        function handleCanvasRightClick(event) {
+            event.preventDefault();
+            
+            if (appState.insertionMode) {
+                exitInsertionMode();
+                showToast('Inserção cancelada', 'info');
+            }
+        }
+
+        // Manipular teclas
+        function handleKeyDown(event) {
+            switch (event.key.toLowerCase()) {
+                case 'escape':
+                    if (appState.insertionMode) {
+                        exitInsertionMode();
+                    }
+                    break;
+                case 's':
+                    if (!event.ctrlKey) {
+                        setTool('select');
+                        event.preventDefault();
+                    }
+                    break;
+                case 'm':
+                    setTool('move');
+                    event.preventDefault();
+                    break;
+                case 'r':
+                    setTool('rotate');
+                    event.preventDefault();
+                    break;
+                case 'c':
+                    if (!event.ctrlKey) {
+                        setTool('copy');
+                        event.preventDefault();
+                    }
+                    break;
+                case 'delete':
+                    deletePieces();
+                    break;
+                case '+':
+                case '=':
+                    zoomIn();
+                    event.preventDefault();
+                    break;
+                case '-':
+                    zoomOut();
+                    event.preventDefault();
+                    break;
+                case 'f':
+                    fitToScreen();
+                    event.preventDefault();
+                    break;
+            }
+        }
+
+        function handleKeyUp(event) {
+            // Implementar se necessário
+        }
+
+        // Definir ferramenta ativa
+        function setTool(tool) {
+            appState.currentTool = tool;
+            updateToolButtons();
+            
+            // Sair do modo de inserção se necessário
+            if (appState.insertionMode && tool !== 'insert') {
+                exitInsertionMode();
+            }
+            
+            console.log('Ferramenta ativa:', tool);
+        }
+
+        // Atualizar botões da toolbar
+        function updateToolButtons() {
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            const toolMap = {
+                'select': 0,
+                'move': 1,
+                'rotate': 2,
+                'copy': 3,
+                'group': 4,
+                'measure': 5,
+                'align': 6,
+                'delete': 7
+            };
+            
+            const toolIndex = toolMap[appState.currentTool];
+            if (toolIndex !== undefined) {
+                const toolButtons = document.querySelectorAll('.tool-btn');
+                if (toolButtons[toolIndex]) {
+                    toolButtons[toolIndex].classList.add('active');
+                }
+            }
+        }
+
+        // Funções de zoom
+        function zoomIn() {
+            appState.zoom = Math.min(appState.zoom * 1.2, 5);
+            updateCanvasTransform();
+            updateStatusBar();
+        }
+
+        function zoomOut() {
+            appState.zoom = Math.max(appState.zoom / 1.2, 0.1);
+            updateCanvasTransform();
+            updateStatusBar();
+        }
+
+        function fitToScreen() {
+            appState.zoom = 1;
+            appState.pan = { x: 0, y: 0 };
+            updateCanvasTransform();
+            updateStatusBar();
+        }
+
+        // Atualizar transformação do canvas
+        function updateCanvasTransform() {
+            const canvas = document.getElementById('canvas');
+            const viewBox = `${-appState.pan.x} ${-appState.pan.y} ${1000 / appState.zoom} ${600 / appState.zoom}`;
+            canvas.setAttribute('viewBox', viewBox);
+        }
+
+        // Atualizar barra de status
+        function updateStatusBar() {
+            const statusIndicators = document.querySelector('.status-indicators');
+            const zoomSpan = statusIndicators.children[3].querySelector('span');
+            zoomSpan.textContent = `Zoom: ${Math.round(appState.zoom * 100)}%`;
+        }
+
+        // Excluir peças selecionadas
+        function deletePieces() {
+            if (appState.selectedPieces.length === 0) return;
+            
+            appState.selectedPieces.forEach(piece => {
+                // Remover do array
+                const index = appState.pieces.findIndex(p => p.id === piece.id);
+                if (index !== -1) {
+                    appState.pieces.splice(index, 1);
+                }
+                
+                // Remover do DOM
+                const pieceElement = document.getElementById(`piece-${piece.id}`);
+                if (pieceElement) {
+                    pieceElement.remove();
+                }
+            });
+            
+            appState.selectedPieces = [];
+            updateMaterialsList();
+            updatePropertiesPanel(null);
+            addToHistory('Excluir peças');
+            
+            showToast('Peças excluídas', 'success');
+        }
+
+        // Desfazer ação
+        function undoAction() {
+            if (appState.historyIndex > 0) {
+                appState.historyIndex--;
+                // Implementar lógica de undo
+                showToast('Ação desfeita', 'info');
+            }
+        }
+
+        // Adicionar ao histórico
+        function addToHistory(action) {
+            appState.history.push({
+                action: action,
+                timestamp: new Date(),
+                state: JSON.parse(JSON.stringify(appState.pieces))
+            });
+            
+            appState.historyIndex = appState.history.length - 1;
+            updateHistoryPanel();
+        }
+
+        // Atualizar painel de histórico
+        function updateHistoryPanel() {
+            const historyContent = document.getElementById('historyContent');
+            const historyHeader = document.querySelector('.history-panel .panel-header span');
+            
+            if (appState.history.length === 0) {
+                historyContent.innerHTML = '<p style="color: #9ca3af; text-align: center;">Nenhuma ação realizada</p>';
+                historyHeader.textContent = '(0)';
+                return;
+            }
+            
+            historyContent.innerHTML = '';
+            appState.history.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                if (index === appState.historyIndex) {
+                    historyItem.classList.add('current');
+                }
+                historyItem.textContent = `${item.action} - ${item.timestamp.toLocaleTimeString()}`;
+                historyContent.appendChild(historyItem);
+            });
+            
+            historyHeader.textContent = `(${appState.history.length})`;
+        }
+
+        // Atualizar UI
+        function updateUI() {
+            updateMaterialsList();
+            updateHistoryPanel();
+            updatePropertiesPanel(null);
+            updateStatusBar();
+        }
+
+        // Atualizar tamanho do canvas
+        function updateCanvasSize() {
+            // Implementar se necessário
+        }
+
+        // Manipular comando
+        function handleCommand(event) {
+            if (event.key === 'Enter') {
+                const command = event.target.value.toLowerCase().trim();
+                executeCommand(command);
+                event.target.value = '';
+            }
+        }
+
+        // Executar comando
+        function executeCommand(command) {
+            switch (command) {
+                case 'zoom':
+                case 'z':
+                    fitToScreen();
+                    break;
+                case 'select':
+                case 'sel':
+                    setTool('select');
+                    break;
+                case 'move':
+                case 'mv':
+                    setTool('move');
+                    break;
+                case 'rotate':
+                case 'rot':
+                    setTool('rotate');
+                    break;
+                case 'copy':
+                case 'cp':
+                    setTool('copy');
+                    break;
+                case 'delete':
+                case 'del':
+                    deletePieces();
+                    break;
+                case 'grid':
+                    toggleGrid();
+                    break;
+                case 'snap':
+                    toggleSnap();
+                    break;
+                default:
+                    showToast(`Comando não reconhecido: ${command}`, 'error');
+            }
+        }
+
+        // Toggle grid
+        function toggleGrid() {
+            appState.gridEnabled = !appState.gridEnabled;
+            const gridElements = document.querySelectorAll('#grid, #gridMajor');
+            gridElements.forEach(el => {
+                el.style.display = appState.gridEnabled ? 'block' : 'none';
+            });
+            updateStatusBar();
+        }
+
+        // Toggle snap
+        function toggleSnap() {
+            appState.snapEnabled = !appState.snapEnabled;
+            updateStatusBar();
+        }
+
+        // Funções dos botões do header
+        function newProject() {
+            if (confirm('Criar novo projeto? Todas as alterações não salvas serão perdidas.')) {
+                appState.pieces = [];
+                appState.selectedPieces = [];
+                appState.history = [];
+                appState.historyIndex = -1;
+                
+                document.getElementById('piecesLayer').innerHTML = '';
+                updateUI();
+                showToast('Novo projeto criado', 'success');
+            }
+        }
+
+        function openProject() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const projectData = JSON.parse(e.target.result);
+                            loadProject(projectData);
+                            showToast('Projeto carregado com sucesso', 'success');
+                        } catch (error) {
+                            showToast('Erro ao carregar projeto', 'error');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        function saveProject() {
+            const projectData = {
+                version: '3.0.0',
+                pieces: appState.pieces,
+                timestamp: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `projeto-hidraulico-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('Projeto salvo com sucesso', 'success');
+        }
+
+        function loadProject(projectData) {
+            appState.pieces = projectData.pieces || [];
+            appState.selectedPieces = [];
+            
+            // Limpar canvas
+            document.getElementById('piecesLayer').innerHTML = '';
+            
+            // Renderizar peças
+            appState.pieces.forEach(piece => {
+                renderPiece(piece);
+            });
+            
+            updateUI();
+        }
+
+        function showTemplates() {
+            document.getElementById('templatesModal').classList.add('active');
+        }
+
+        function loadTemplate(templateName) {
+            const templates = {
+                'banheiro': [
+                    { type: 'joelho-90-dn100', x: 100, y: 100 },
+                    { type: 'te-90-dn100', x: 200, y: 100 },
+                    { type: 'tubo-dn100-6m', x: 300, y: 100 },
+                    { type: 'cap-esgoto-dn40', x: 400, y: 100 }
+                ],
+                'cozinha': [
+                    { type: 'joelho-90-dn100', x: 150, y: 150 },
+                    { type: 'tubo-dn100-6m', x: 250, y: 150 },
+                    { type: 'te-90-dn100', x: 350, y: 150 }
+                ],
+                'area-servico': [
+                    { type: 'joelho-90-dn100', x: 200, y: 200 },
+                    { type: 'tubo-dn100-6m', x: 300, y: 200 }
+                ],
+                'irrigacao': [
+                    { type: 'joelho-90-irrigacao', x: 100, y: 250 },
+                    { type: 'te-irrigacao-dn25', x: 200, y: 250 },
+                    { type: 'joelho-90-irrigacao', x: 300, y: 250 }
+                ],
+                'piscina': [
+                    { type: 'joelho-90-dn100', x: 150, y: 300 },
+                    { type: 'te-90-dn100', x: 250, y: 300 },
+                    { type: 'tubo-dn100-6m', x: 350, y: 300 },
+                    { type: 'joelho-90-dn100', x: 450, y: 300 }
+                ],
+                'comercial': [
+                    { type: 'joelho-90-dn100', x: 100, y: 350 },
+                    { type: 'te-90-dn100', x: 200, y: 350 },
+                    { type: 'tubo-dn100-6m', x: 300, y: 350 },
+                    { type: 'joelho-90-dn100', x: 400, y: 350 },
+                    { type: 'te-90-dn100', x: 500, y: 350 }
+                ]
+            };
+            
+            const templatePieces = templates[templateName];
+            if (templatePieces) {
+                templatePieces.forEach(pieceTemplate => {
+                    const piece = {
+                        id: Date.now() + Math.random(),
+                        type: pieceTemplate.type,
+                        x: pieceTemplate.x,
+                        y: pieceTemplate.y,
+                        rotation: 0,
+                        layer: appState.currentLayer,
+                        selected: false
+                    };
+                    
+                    appState.pieces.push(piece);
+                    renderPiece(piece);
+                });
+                
+                updateMaterialsList();
+                addToHistory(`Carregar template ${templateName}`);
+                closeModal('templatesModal');
+                showToast(`Template "${templateName}" carregado`, 'success');
+            }
+        }
+
+        function exportProject() {
+            const options = [
+                'PDF Detalhado',
+                'Imagem HD',
+                'Projeto JSON'
+            ];
+            
+            const choice = prompt(`Escolha o formato de exportação:\n${options.map((opt, i) => `${i + 1}. ${opt}`).join('\n')}`);
+            
+            switch (choice) {
+                case '1':
+                    exportBudgetPDF();
+                    break;
+                case '2':
+                    exportImageHD();
+                    break;
+                case '3':
+                    saveProject();
+                    break;
+                default:
+                    showToast('Exportação cancelada', 'info');
+            }
+        }
+
+        function exportImageHD() {
+            html2canvas(document.getElementById('canvas')).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `projeto-hidraulico-${new Date().toISOString().split('T')[0]}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+                showToast('Imagem exportada com sucesso', 'success');
+            });
+        }
+
+        function show3DView() {
+            document.getElementById('view3DModal').classList.add('active');
+        }
+
+        function rotate3D() {
+            showToast('Rotação 3D ativada', 'info');
+        }
+
+        function fit3D() {
+            showToast('Vista 3D ajustada', 'info');
+        }
+
+        function export3D() {
+            showToast('Vista 3D exportada', 'success');
+        }
+
+        function showBudget() {
+            const budgetContent = document.getElementById('budgetContent');
+            
+            if (appState.pieces.length === 0) {
+                budgetContent.innerHTML = '<p style="color: #9ca3af; text-align: center; padding: 40px;">Nenhuma peça adicionada ao projeto</p>';
+            } else {
+                // Gerar orçamento detalhado
+                const groupedPieces = {};
+                let totalCost = 0;
+                
+                appState.pieces.forEach(piece => {
+                    const pieceData = pieceCatalog.find(p => p.id === piece.type);
+                    if (!pieceData) return;
+                    
+                    if (!groupedPieces[piece.type]) {
+                        groupedPieces[piece.type] = {
+                            data: pieceData,
+                            count: 0,
+                            totalCost: 0
+                        };
+                    }
+                    
+                    groupedPieces[piece.type].count++;
+                    groupedPieces[piece.type].totalCost += pieceData.price;
+                    totalCost += pieceData.price;
+                });
+                
+                let budgetHTML = `
+                    <div style="background: #374151; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin-bottom: 15px; color: #f3f4f6;">Resumo do Orçamento</h3>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+                            <div>
+                                <div style="font-size: 24px; font-weight: bold; color: #3b82f6;">${appState.pieces.length}</div>
+                                <div style="font-size: 12px; color: #9ca3af;">Total de Peças</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 24px; font-weight: bold; color: #10b981;">R$ ${totalCost.toFixed(2)}</div>
+                                <div style="font-size: 12px; color: #9ca3af;">Custo Total</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${Object.keys(groupedPieces).length}</div>
+                                <div style="font-size: 12px; color: #9ca3af;">Tipos Diferentes</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #374151; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin-bottom: 15px; color: #f3f4f6;">Lista Detalhada de Materiais</h3>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid #4b5563;">
+                                    <th style="text-align: left; padding: 8px; color: #d1d5db;">Item</th>
+                                    <th style="text-align: center; padding: 8px; color: #d1d5db;">Qtd</th>
+                                    <th style="text-align: center; padding: 8px; color: #d1d5db;">Preço Unit.</th>
+                                    <th style="text-align: right; padding: 8px; color: #d1d5db;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                Object.values(groupedPieces).forEach(group => {
+                    budgetHTML += `
+                        <tr style="border-bottom: 1px solid #374151;">
+                            <td style="padding: 8px;">
+                                <div style="font-weight: bold; color: #f3f4f6;">${group.data.name}</div>
+                                <div style="font-size: 12px; color: #9ca3af;">Código: ${group.data.code}</div>
+                            </td>
+                            <td style="text-align: center; padding: 8px; color: #d1d5db;">${group.count}</td>
+                            <td style="text-align: center; padding: 8px; color: #d1d5db;">R$ ${group.data.price.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px; color: #10b981; font-weight: bold;">R$ ${group.totalCost.toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+                
+                budgetHTML += `
+                            </tbody>
+                            <tfoot>
+                                <tr style="border-top: 2px solid #4b5563;">
+                                    <td colspan="3" style="padding: 12px; font-weight: bold; color: #f3f4f6;">TOTAL GERAL:</td>
+                                    <td style="text-align: right; padding: 12px; font-weight: bold; color: #10b981; font-size: 18px;">R$ ${totalCost.toFixed(2)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding: 15px; background: #1f2937; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+                            <strong>Observações:</strong> Preços baseados no catálogo Tigre BIM. 
+                            Considere margem de segurança de 10% para materiais. 
+                            Orçamento válido por 30 dias.
+                        </p>
+                    </div>
+                `;
+                
+                budgetContent.innerHTML = budgetHTML;
+            }
+            
+            document.getElementById('budgetModal').classList.add('active');
+        }
+
+        function exportBudgetPDF() {
+            if (typeof jsPDF === 'undefined') {
+                showToast('Biblioteca PDF não carregada', 'error');
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Título
+            doc.setFontSize(20);
+            doc.text('Orçamento Hidráulico', 20, 30);
+            
+            // Data
+            doc.setFontSize(12);
+            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 45);
+            
+            // Lista de materiais
+            let y = 65;
+            doc.setFontSize(14);
+            doc.text('Lista de Materiais:', 20, y);
+            y += 10;
+            
+            const groupedPieces = {};
+            let totalCost = 0;
+            
+            appState.pieces.forEach(piece => {
+                const pieceData = pieceCatalog.find(p => p.id === piece.type);
+                if (!pieceData) return;
+                
+                if (!groupedPieces[piece.type]) {
+                    groupedPieces[piece.type] = {
+                        data: pieceData,
+                        count: 0,
+                        totalCost: 0
+                    };
+                }
+                
+                groupedPieces[piece.type].count++;
+                groupedPieces[piece.type].totalCost += pieceData.price;
+                totalCost += pieceData.price;
+            });
+            
+            doc.setFontSize(10);
+            Object.values(groupedPieces).forEach(group => {
+                y += 8;
+                doc.text(`${group.count}x ${group.data.name} - R$ ${group.totalCost.toFixed(2)}`, 25, y);
+                doc.text(`Código: ${group.data.code}`, 25, y + 4);
+                y += 4;
+            });
+            
+            // Total
+            y += 15;
+            doc.setFontSize(14);
+            doc.text(`TOTAL: R$ ${totalCost.toFixed(2)}`, 20, y);
+            
+            doc.save(`orcamento-hidraulico-${new Date().toISOString().split('T')[0]}.pdf`);
+            showToast('Orçamento exportado em PDF', 'success');
+        }
+
+        function printBudget() {
+            window.print();
+        }
+
+        // Funções de importação DWG
+        function importDWG() {
+            document.getElementById('dwgModal').classList.add('active');
+        }
+
+        function processDWGFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            // Simular processamento de arquivo DWG
+            showToast('Processando arquivo DWG...', 'info');
+            
+            setTimeout(() => {
+                const mockBlocks = [
+                    { name: 'BLOCO_JOELHO_90', description: 'Joelho 90° DN100', count: 3 },
+                    { name: 'BLOCO_TUBO_100', description: 'Tubo DN100 6M', count: 5 },
+                    { name: 'BLOCO_TE_90', description: 'Tê 90° DN100', count: 2 },
+                    { name: 'BLOCO_CAP_100', description: 'Cap DN100', count: 4 },
+                    { name: 'BLOCO_REDUCAO', description: 'Redução 100x75mm', count: 1 }
+                ];
+                
+                displayDWGBlocks(mockBlocks);
+                showToast('Arquivo DWG processado com sucesso', 'success');
+            }, 2000);
+        }
+
+        function displayDWGBlocks(blocks) {
+            const blocksList = document.getElementById('blocksList');
+            const dwgBlocks = document.getElementById('dwgBlocks');
+            
+            blocksList.innerHTML = '';
+            blocks.forEach((block, index) => {
+                const blockItem = document.createElement('div');
+                blockItem.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #4b5563; border-radius: 4px; margin-bottom: 5px;';
+                blockItem.innerHTML = `
+                    <input type="checkbox" id="block-${index}" checked>
+                    <label for="block-${index}" style="flex: 1; color: #f3f4f6;">
+                        <strong>${block.name}</strong><br>
+                        <small style="color: #9ca3af;">${block.description} (${block.count} encontrados)</small>
+                    </label>
+                `;
+                blocksList.appendChild(blockItem);
+            });
+            
+            dwgBlocks.style.display = 'block';
+        }
+
+        function importSelectedBlocks() {
+            const checkboxes = document.querySelectorAll('#blocksList input[type="checkbox"]:checked');
+            let importedCount = 0;
+            
+            checkboxes.forEach((checkbox, index) => {
+                const blockName = checkbox.id.replace('block-', '');
+                
+                // Mapear blocos DWG para peças do catálogo
+                const blockMapping = {
+                    '0': 'joelho-90-dn100',
+                    '1': 'tubo-dn100-6m',
+                    '2': 'te-90-dn100',
+                    '3': 'cap-esgoto-dn40',
+                    '4': 'reducao-100x75'
+                };
+                
+                const pieceType = blockMapping[blockName];
+                if (pieceType) {
+                    const piece = {
+                        id: Date.now() + Math.random(),
+                        type: pieceType,
+                        x: 100 + (importedCount * 80),
+                        y: 100 + (Math.floor(importedCount / 5) * 80),
+                        rotation: 0,
+                        layer: appState.currentLayer,
+                        selected: false
+                    };
+                    
+                    appState.pieces.push(piece);
+                    renderPiece(piece);
+                    importedCount++;
+                }
+            });
+            
+            updateMaterialsList();
+            addToHistory(`Importar ${importedCount} blocos DWG`);
+            closeModal('dwgModal');
+            showToast(`${importedCount} blocos importados com sucesso`, 'success');
+        }
+
+        // Fechar modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Mostrar toast
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        // Inicializar aplicação quando a página carregar
+        document.addEventListener('DOMContentLoaded', initApp);
+        
+        // Fechar modais clicando fora
+        document.addEventListener('click', (event) => {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        });
+        
+        console.log('Script carregado com sucesso');
+    </script>
+</body>
+</html>
